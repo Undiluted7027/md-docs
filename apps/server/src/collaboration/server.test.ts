@@ -3,7 +3,7 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/pro
 import * as Y from 'yjs';
 import { createServer } from './server.ts';
 import { openDatabase, type DocumentStore } from './database.ts';
-import { checkpointRequest, parseCheckpointReply } from './protocol.ts';
+import { checkpointRequest, parseCheckpointReply } from '@md-docs/protocol';
 
 const TIMEOUT_MS = 5000;
 const POLL_MS = 10;
@@ -51,7 +51,10 @@ async function start(store: DocumentStore, name = 'poc-document') {
 // Connects a client to the server, like a browser tab would.
 function client(url: string, name = 'poc-document') {
   const document = new Y.Doc();
-  const websocketProvider = new HocuspocusProviderWebsocket({ url, WebSocketPolyfill: BrowserSocket });
+  const websocketProvider = new HocuspocusProviderWebsocket({
+    url,
+    WebSocketPolyfill: BrowserSocket,
+  });
   const provider = new HocuspocusProvider({ websocketProvider, name, document, awareness: null });
   provider.attach();
   cleanups.push(() => {

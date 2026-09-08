@@ -37,11 +37,13 @@ public hosting.
 
 - `apps/web`: React, Vite, CodeMirror, and the Yjs client.
 - `apps/server`: Fastify, Hocuspocus, and Drizzle with the Postgres driver.
+- `packages/protocol`: the checkpoint wire format shared by client and server.
 - `docs`: product specifications and verification notes.
 
-There is no shared config package. Both apps extend `tsconfig.base.json`; the root
-ESLint configuration applies type-aware checks to application source.
-`bunfig.toml` selects isolated installs and exact dependency versions.
+There is no shared config package. Every workspace extends `tsconfig.base.json`;
+the root ESLint configuration applies type-aware checks to `apps/*` and
+`packages/*` source. `bunfig.toml` selects isolated installs and exact
+dependency versions.
 
 `@types/bun` currently trails the runtime at 1.4.1, so the root override selects
 `bun-types` 1.4.2. Upgrade the runtime declaration and actual Bun types together.

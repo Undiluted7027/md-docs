@@ -1,8 +1,4 @@
-// The checkpoint wire format lives with the collaboration service that speaks it.
-import {
-  checkpointRequest,
-  parseCheckpointReply,
-} from '../../../server/src/collaboration/protocol.ts';
+import { checkpointRequest, parseCheckpointReply } from '@md-docs/protocol';
 
 export type SaveStatus = 'Unsaved changes' | 'Saving…' | 'Saved' | 'Unsaved — retrying';
 

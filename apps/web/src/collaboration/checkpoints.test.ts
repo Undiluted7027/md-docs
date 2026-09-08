@@ -1,9 +1,6 @@
 import { expect, test } from 'bun:test';
 import { Checkpoints, type SaveStatus } from './checkpoints.ts';
-import {
-  checkpointReply,
-  parseCheckpointRequest,
-} from '../../../server/src/collaboration/protocol.ts';
+import { checkpointReply, parseCheckpointRequest } from '@md-docs/protocol';
 
 // These trackers run with 1ms timers, so sleeping a whole tick guarantees any
 // scheduled request has already fired.

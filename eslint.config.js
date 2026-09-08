@@ -23,7 +23,7 @@ export default defineConfig(
     extends: [tseslint.configs.recommended],
   },
   {
-    files: ['apps/*/src/**/*.{ts,tsx}'],
+    files: ['apps/*/src/**/*.{ts,tsx}', 'packages/*/src/**/*.{ts,tsx}'],
     extends: [tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {

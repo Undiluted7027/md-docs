@@ -7,7 +7,12 @@ const { app } = await createServer(database, {
   allowedOrigin: env.WEB_ORIGIN,
   // Pretty console logs for local development; plain JSON otherwise.
   logger: env.LOG_PRETTY
-    ? { transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } }
+    ? {
+        transport: {
+          target: 'pino-pretty',
+          options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+        },
+      }
     : true,
   // Keep internal error messages out of client responses in production.
   exposeErrors: env.NODE_ENV !== 'production',

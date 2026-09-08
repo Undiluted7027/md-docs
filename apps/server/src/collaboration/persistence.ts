@@ -6,8 +6,13 @@ const RETRY_DELAY_MS = 2000;
 
 /**
  * Owns every write to the document store. Autosaves, explicit checkpoint saves,
- * retries and the shutdown flush all run through a single serialized queue, so a
- * slow or failed write can never be overtaken by an older snapshot.
+ * retries and the shutdown flush all run through one serialized queue, so a slow
+ * or failed write can never be overtaken by an older snapshot.
+ *
+ * Progress is two counters: `#changeSequence` advances on every edit;
+ * `#committedSequence` catches up to the sequence a snapshot held once that
+ * snapshot is durably written. The document is dirty while the second trails the
+ * first.
  */
 export class Persistence {
   #store: DocumentStore;
@@ -15,13 +20,13 @@ export class Persistence {
 
   /** The most recent document we have been asked to persist. */
   #latest: { id: string; document: Y.Doc } | undefined;
+  /** Advances on every edit. */
+  #changeSequence = 0;
+  /** The newest change sequence that has been durably committed. */
+  #committedSequence = 0;
   /** Tail of the write queue. Each new write runs after this resolves. */
   #queue: Promise<void> = Promise.resolve();
   #autosaveTimer: ReturnType<typeof setTimeout> | undefined;
-  /** True while edits exist that are not captured by a running or finished write. */
-  #dirty = false;
-  /** Counts save attempts so a failed one can tell whether a newer save supersedes it. */
-  #saveCount = 0;
   #closing = false;
 
   constructor(store: DocumentStore, reportFailure: () => void) {
@@ -31,13 +36,13 @@ export class Persistence {
 
   /** True while the latest edits have not been durably persisted. */
   get dirty(): boolean {
-    return this.#dirty;
+    return this.#committedSequence < this.#changeSequence;
   }
 
   /** Records a document change and schedules an autosave. */
   changed(id: string, document: Y.Doc): void {
     this.#latest = { id, document };
-    this.#dirty = true;
+    this.#changeSequence += 1;
     this.#scheduleAutosave(AUTOSAVE_DELAY_MS);
   }
 
@@ -46,31 +51,33 @@ export class Persistence {
    * committed it. Rejects if the write fails so callers can report it.
    */
   async save(id: string, document: Y.Doc): Promise<void> {
-    // Encode now: this snapshot covers every edit so far, so the document is
-    // clean unless the write fails or a new edit arrives while it runs.
+    const sequence = this.#changeSequence;
     const snapshot = Y.encodeStateAsUpdate(document);
-    const attempt = ++this.#saveCount;
-    this.#dirty = false;
     try {
-      await this.#enqueue(() => this.#store.save(id, snapshot));
+      await this.#enqueue(async () => {
+        await this.#store.save(id, snapshot);
+        this.#committedSequence = Math.max(this.#committedSequence, sequence);
+      });
     } catch (error) {
-      // Re-dirty only if no newer save has taken a snapshot since this one; a
-      // newer save owns the dirty state and may still succeed.
-      if (attempt === this.#saveCount) this.#dirty = true;
       this.#reportFailure();
       this.#scheduleAutosave(RETRY_DELAY_MS);
       throw error;
     }
   }
 
-  /** Flushes any pending change, then waits for the queue to drain. */
+  /**
+   * Flushes any unsaved change, then waits for the queue to drain. Keeps
+   * flushing until the latest edits are committed; a write that fails here
+   * rejects, so shutdown surfaces the lost data instead of reporting success.
+   */
   async close(): Promise<void> {
     this.#closing = true;
     clearTimeout(this.#autosaveTimer);
-    if (this.#latest && this.#dirty) {
-      await this.save(this.#latest.id, this.#latest.document);
-    }
     await this.#queue;
+    while (this.#latest && this.dirty) {
+      await this.save(this.#latest.id, this.#latest.document);
+      await this.#queue;
+    }
   }
 
   /**

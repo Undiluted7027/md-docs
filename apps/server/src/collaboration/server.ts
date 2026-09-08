@@ -10,7 +10,7 @@ import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import type { DocumentStore } from './database.ts';
 import { Persistence } from './persistence.ts';
-import { checkpointReply, parseCheckpointRequest } from './protocol.ts';
+import { checkpointReply, parseCheckpointRequest } from '@md-docs/protocol';
 
 interface CreateServerOptions {
   documentName?: string;

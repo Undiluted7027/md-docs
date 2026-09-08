@@ -8,10 +8,7 @@ import * as Y from 'yjs';
 import { Checkpoints, type SaveStatus } from './checkpoints.ts';
 
 export type ConnectionStatus =
-  | 'Connecting…'
-  | 'Connected'
-  | 'Reconnecting…'
-  | 'Document unavailable';
+  'Connecting…' | 'Connected' | 'Reconnecting…' | 'Document unavailable';
 
 interface EditorSessionOptions {
   container: HTMLElement;
@@ -33,6 +30,23 @@ export function createEditorSession(options: EditorSessionOptions) {
   let everLoaded = false;
   let disposed = false;
 
+  // The editor, read-only until the document finishes its first sync.
+  const view = new EditorView({
+    parent: options.container,
+    state: EditorState.create({
+      extensions: [
+        basicSetup,
+        markdown(),
+        yCollab(doc.getText('content'), null),
+        editable.of(EditorState.readOnly.of(true)),
+        EditorView.contentAttributes.of({ 'aria-label': 'Markdown document' }),
+        EditorView.lineWrapping,
+      ],
+    }),
+  });
+
+  // `provider` is assigned just below. `canSend`/`send` only run while the user
+  // is editing a synced document, well after this function returns.
   const checkpoints = new Checkpoints({
     canSend: () => connected && provider.synced && !provider.hasUnsyncedChanges,
     send: (payload) => {
@@ -75,20 +89,6 @@ export function createEditorSession(options: EditorSessionOptions) {
     checkpoints.changed();
   };
   doc.on('update', onDocUpdate);
-
-  const view = new EditorView({
-    parent: options.container,
-    state: EditorState.create({
-      extensions: [
-        basicSetup,
-        markdown(),
-        yCollab(doc.getText('content'), null),
-        editable.of(EditorState.readOnly.of(true)),
-        EditorView.contentAttributes.of({ 'aria-label': 'Markdown document' }),
-        EditorView.lineWrapping,
-      ],
-    }),
-  });
 
   return {
     destroy() {
