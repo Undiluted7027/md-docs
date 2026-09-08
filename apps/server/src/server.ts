@@ -23,7 +23,7 @@ const { app } = await createServer(database, {
 app.addHook('onClose', () => database.close());
 
 // Fastify logs "Server listening at <address>" itself once this resolves.
-await app.listen({ port: env.PORT, host: '127.0.0.1' });
+await app.listen({ port: env.PORT, host: env.HOST });
 
 // On SIGTERM/SIGINT: stop accepting connections, flush, close the database, exit.
 async function shutdown() {

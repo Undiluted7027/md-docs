@@ -32,6 +32,7 @@ import {
 import { markdown } from '@codemirror/lang-markdown';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import * as Y from 'yjs';
+import { collaborationUrl } from '../serverUrls.ts';
 import { Checkpoints, type SaveStatus } from './checkpoints.ts';
 import {
   normalizeDisplayName,
@@ -253,9 +254,4 @@ export function replaceText(text: Y.Text, next: string) {
 
   if (endCurrent > start) text.delete(start, endCurrent - start);
   if (endNext > start) text.insert(start, next.slice(start, endNext));
-}
-
-function collaborationUrl() {
-  const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${location.host}/collaboration`;
 }

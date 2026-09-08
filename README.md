@@ -10,9 +10,9 @@ export. Narrow screens can switch between source and preview.
 
 ## Run locally
 
-Use Bun **1.4.2**. Check with `bun --version`: the `packageManager` field records
-this version but does not install or enforce it. Bun 1.3.0 failed our WebSocket
-proxy and shutdown checks; use the declared version for development and deployment.
+Use Bun **1.4.2**. Check with `bun --version`; `packageManager` and `.bun-version`
+record the required version for development and deployment. Bun 1.3.0 failed our
+WebSocket proxy and shutdown checks.
 
 1. Run `bun install --frozen-lockfile`.
 2. Start your local Supabase stack if necessary (`bun run db:start`).
@@ -71,8 +71,9 @@ Useful root commands:
 Server and migration scripts read `apps/server/.env`, which Bun loads
 automatically from that directory. `@t3-oss/env-core` and Zod validate those
 values before the server opens a database connection. Vite separately validates
-its local proxy port from `apps/web/.env`; only variables named in that contract
-are read. Vite proxies `/api` and `/collaboration` to the same Fastify server.
+its private local proxy port from `apps/web/.env`. Browser code has a distinct
+public environment contract for `VITE_SERVER_ORIGIN`; it is unset locally so Vite
+proxies `/api` and `/collaboration` to the same Fastify server.
 `bun test` does not load the server environment file, so the database-backed test
 runs only when `DATABASE_URL` is already in the environment (`DATABASE_URL=… bun
 test`, or export it first). That test creates a unique document and removes only
@@ -101,5 +102,6 @@ must show “Document unavailable.” Never stop or reset the database for this 
 
 - [Proof-of-concept spec](docs/poc-spec.md)
 - [Later work](docs/later-work.md)
+- [Deployment](docs/deployment.md)
 - [POC 1 verification](docs/poc-1-verification.md)
 - [POC 2 verification](docs/poc-2-verification.md)

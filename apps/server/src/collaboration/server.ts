@@ -5,6 +5,7 @@ import Fastify, {
   type FastifyRequest,
   type FastifyServerOptions,
 } from 'fastify';
+import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
@@ -37,6 +38,11 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
       error: label,
       message: statusCode >= 500 && !exposeErrors ? label : error.message,
     });
+  });
+  await app.register(cors, {
+    origin(origin, callback) {
+      callback(null, origin === allowedOrigin);
+    },
   });
   const persistence = new Persistence(store, (id) => {
     app.log.error({ documentName: id }, 'Document persistence failed; retrying.');

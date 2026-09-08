@@ -320,6 +320,33 @@ test('rejects wrong origins and unknown document names', async () => {
   expect(a.provider.synced).toBe(false);
 });
 
+test('exposes API responses only to the configured browser origin', async () => {
+  const allowedOrigin = 'https://md-docs.pages.dev';
+  const server = await createServer(memoryStore(), { allowedOrigin, logger: false });
+  cleanups.push(() => server.app.close());
+
+  const allowed = await server.app.inject({
+    method: 'OPTIONS',
+    url: '/api/documents',
+    headers: {
+      origin: allowedOrigin,
+      'access-control-request-method': 'POST',
+    },
+  });
+  expect(allowed.statusCode).toBe(204);
+  expect(allowed.headers['access-control-allow-origin']).toBe(allowedOrigin);
+
+  const otherOrigin = await server.app.inject({
+    method: 'OPTIONS',
+    url: '/api/documents',
+    headers: {
+      origin: 'https://preview.md-docs.pages.dev',
+      'access-control-request-method': 'POST',
+    },
+  });
+  expect(otherOrigin.headers['access-control-allow-origin']).toBeUndefined();
+});
+
 test('documents have isolated collaborative state', async () => {
   const store = memoryStore();
   const server = await start(store);
