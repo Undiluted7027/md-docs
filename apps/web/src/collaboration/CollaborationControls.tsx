@@ -5,8 +5,10 @@ interface CollaborationControlsProps {
   participants: Participant[];
   canUndo: boolean;
   canRedo: boolean;
+  canExport: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  onExport: () => void;
 }
 
 type CopyStatus = 'idle' | 'copied' | 'failed';
@@ -15,8 +17,10 @@ export function CollaborationControls({
   participants,
   canUndo,
   canRedo,
+  canExport,
   onUndo,
   onRedo,
+  onExport,
 }: CollaborationControlsProps) {
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const resetTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -56,6 +60,14 @@ export function CollaborationControls({
           }}
         >
           Copy edit link
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!canExport}
+          onClick={onExport}
+        >
+          Export Markdown
         </button>
         <span className="copy-status" role="status">
           {copyStatus === 'copied' && 'Link copied'}

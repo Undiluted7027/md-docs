@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SaveStatus } from '../collaboration/checkpoints.ts';
 import { CollaborationControls } from '../collaboration/CollaborationControls.tsx';
+import { DocumentStatus } from '../collaboration/DocumentStatus.tsx';
 import type { Participant } from '../collaboration/presence.ts';
 import { createEditorSession, type ConnectionStatus } from '../collaboration/session.ts';
 import { MarkdownPreview } from './MarkdownPreview.tsx';
+import { downloadMarkdown } from './exportMarkdown.ts';
+
+type DocumentView = 'source' | 'preview';
 
 interface DocumentEditorProps {
   documentName: string;
@@ -20,6 +24,7 @@ export function DocumentEditor({ documentName, displayName }: DocumentEditorProp
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false });
   const [loaded, setLoaded] = useState(false);
+  const [documentView, setDocumentView] = useState<DocumentView>('source');
 
   useEffect(() => {
     const parent = container.current;
@@ -68,23 +73,51 @@ export function DocumentEditor({ documentName, displayName }: DocumentEditorProp
           onChange={(event) => session.current?.setTitle(event.target.value)}
           onKeyDown={handleTitleUndo}
         />
-        <p role="status">
-          {connection} · {save}
-        </p>
+        <DocumentStatus connection={connection} save={save} loaded={loaded} />
       </header>
       <CollaborationControls
         participants={participants}
         canUndo={undoState.canUndo}
         canRedo={undoState.canRedo}
+        canExport={loaded}
         onUndo={() => session.current?.undo()}
         onRedo={() => session.current?.redo()}
+        onExport={() => {
+          downloadMarkdown(title, content);
+        }}
       />
-      <div className="document-workspace">
-        <section aria-label="Markdown source">
+      <div className="mobile-view-switch" role="group" aria-label="Document view">
+        <button
+          type="button"
+          className="secondary-button"
+          aria-controls="markdown-source"
+          aria-pressed={documentView === 'source'}
+          onClick={() => {
+            setDocumentView('source');
+          }}
+        >
+          Source
+        </button>
+        <button
+          type="button"
+          className="secondary-button"
+          aria-controls="markdown-preview"
+          aria-pressed={documentView === 'preview'}
+          onClick={() => {
+            setDocumentView('preview');
+          }}
+        >
+          Preview
+        </button>
+      </div>
+      {/* data-mobile-view is read only by the narrow-screen CSS, which hides the
+          pane that is not selected. On wide screens both panes always show. */}
+      <div className="document-workspace" data-mobile-view={documentView}>
+        <section id="markdown-source" className="source-pane" aria-label="Markdown source">
           <h2>Markdown</h2>
           <div className="editor" ref={container} />
         </section>
-        <section>
+        <section id="markdown-preview" className="preview-pane">
           <h2>Preview</h2>
           <MarkdownPreview source={content} />
         </section>

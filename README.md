@@ -5,7 +5,8 @@ Collaborative Markdown editing, previews, and sharing.
 The current proof of concept creates collaborative Markdown documents with private
 edit links. Each document has a shared title, a source editor, a safe live preview,
 named participant presence, remote cursors, participant-local undo and redo,
-automatic saving to Postgres, and reconnection support.
+automatic saving to Postgres, reconnection support, and exact-source Markdown
+export. Narrow screens can switch between source and preview.
 
 ## Run locally
 
@@ -82,7 +83,8 @@ injected-failure messages appear in the test output.
 
 The browser keeps its Yjs document in memory while disconnected. “Saved” means a
 checkpoint covering the current edits committed to Postgres. A newer edit or a
-disconnect invalidates that indication. Failed saves retry automatically.
+disconnect invalidates that indication. Failed saves retry automatically. Export
+always uses the Markdown currently visible in the editor, including unsaved edits.
 
 Do not close or reload a tab with unsaved offline edits: cross-session offline
 storage is outside the POC. Closing an already-saved tab and restarting the server

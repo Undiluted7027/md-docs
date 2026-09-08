@@ -34,7 +34,7 @@ export function DocumentPage({ documentId }: { documentId: string }) {
     return (
       <section role="alert">
         <h1>Could not open document</h1>
-        <p>Something went wrong reaching the server.</p>
+        <p>The server may still be starting or temporarily unavailable.</p>
         <button
           onClick={() => {
             setAttempt((count) => count + 1);

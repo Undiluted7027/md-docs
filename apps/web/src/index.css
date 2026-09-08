@@ -58,10 +58,26 @@ button:disabled {
   margin-bottom: 24px;
 }
 
-.document-header p {
+.document-status {
   flex: none;
+  max-width: 420px;
+}
+
+.document-status p {
+  margin: 0;
   color: #666;
   font-size: 13px;
+}
+
+.document-status [role="status"] {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.document-status .recovery-note {
+  margin-top: 6px;
+  text-align: right;
 }
 
 .collaboration-controls {
@@ -165,6 +181,10 @@ button:disabled {
   gap: 24px;
 }
 
+.mobile-view-switch {
+  display: none;
+}
+
 .document-workspace h2 {
   margin: 0 0 8px;
   font-size: 14px;
@@ -209,6 +229,18 @@ button:disabled {
     display: block;
   }
 
+  .document-status {
+    margin-top: 12px;
+  }
+
+  .document-status [role="status"] {
+    justify-content: flex-start;
+  }
+
+  .document-status .recovery-note {
+    text-align: left;
+  }
+
   .collaboration-controls {
     display: grid;
   }
@@ -220,6 +252,22 @@ button:disabled {
 
   .document-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-view-switch {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mobile-view-switch [aria-pressed="true"] {
+    color: white;
+    background: #202020;
+  }
+
+  .document-workspace[data-mobile-view="source"] .preview-pane,
+  .document-workspace[data-mobile-view="preview"] .source-pane {
+    display: none;
   }
 
   .cm-editor,

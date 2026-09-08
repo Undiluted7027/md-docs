@@ -1,6 +1,7 @@
 import { checkpointRequest, parseCheckpointReply } from '@md-docs/protocol';
 
-export type SaveStatus = 'Unsaved changes' | 'Saving…' | 'Saved' | 'Unsaved — retrying';
+export type SaveStatus =
+  'Unsaved changes' | 'Saving…' | 'Saved' | 'Waiting to reconnect' | 'Save failed — retrying';
 
 const DEFAULT_DELAY_MS = 500;
 const DEFAULT_RETRY_DELAY_MS = 2000;
@@ -73,7 +74,7 @@ export class Checkpoints {
   disconnected(): void {
     this.#clearPending();
     clearTimeout(this.#requestTimer);
-    this.#setStatus('Unsaved changes');
+    this.#setStatus('Waiting to reconnect');
   }
 
   /** Call with each stateless payload received from the server. */
@@ -88,7 +89,7 @@ export class Checkpoints {
     if (reply.type === 'saved' && covered) {
       this.#setStatus('Saved');
     } else if (reply.type === 'save-failed') {
-      this.#setStatus('Unsaved — retrying');
+      this.#setStatus('Save failed — retrying');
       this.#scheduleRequest(this.#retryDelay);
     } else {
       // Saved, but newer edits are already unsaved again.
@@ -122,7 +123,7 @@ export class Checkpoints {
     this.#send(checkpointRequest(requestId));
     this.#ackTimer = setTimeout(() => {
       this.#clearPending();
-      this.#setStatus('Unsaved — retrying');
+      this.#setStatus('Save failed — retrying');
       this.#scheduleRequest(this.#retryDelay);
     }, this.#ackTimeout);
   }

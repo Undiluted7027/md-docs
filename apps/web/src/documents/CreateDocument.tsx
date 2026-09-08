@@ -24,7 +24,7 @@ export function CreateDocument() {
       <button type="button" disabled={creating} onClick={() => void create()}>
         {creating ? 'Creating…' : 'Create document'}
       </button>
-      {failed && <p role="alert">Could not create a document. Please try again.</p>}
+      {failed && <p role="alert">The server may still be starting. Wait a moment and try again.</p>}
     </section>
   );
 }

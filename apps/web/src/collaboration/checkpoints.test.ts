@@ -56,7 +56,7 @@ test('a stale or previous-connection acknowledgement cannot mark newer edits sav
     await Bun.sleep(TICK_MS);
     tracker.disconnected();
     replyTo(tracker, sent, 1, 'saved');
-    expect(statuses.at(-1)).toBe('Unsaved changes');
+    expect(statuses.at(-1)).toBe('Waiting to reconnect');
 
     // After reconnecting, a fresh request is answered and does cover the document.
     tracker.ready();
@@ -95,7 +95,7 @@ test('a failed checkpoint requests another save on its own', async () => {
     await Bun.sleep(TICK_MS);
 
     replyTo(tracker, sent, 0, 'save-failed');
-    expect(statuses.at(-1)).toBe('Unsaved — retrying');
+    expect(statuses.at(-1)).toBe('Save failed — retrying');
 
     // The retry fires without another edit.
     await Bun.sleep(TICK_MS);
