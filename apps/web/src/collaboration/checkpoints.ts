@@ -11,9 +11,8 @@ const DEFAULT_RETRY_DELAY_MS = 2000;
 
 // A checkpoint request only proves that the edits present when it was sent are
 // saved. If newer edits arrive, or the connection drops, before the reply, the
-// reply no longer covers the current document and we ask again. A server that
-// never replies is treated as a failure after this timeout.
-const ACK_TIMEOUT_MS = 5000;
+// reply no longer covers the current document and we ask again.
+const DEFAULT_ACK_TIMEOUT_MS = 5000;
 
 interface CheckpointOptions {
   /** Whether a request can be sent right now (connected and fully synced). */
@@ -26,6 +25,8 @@ interface CheckpointOptions {
   delay?: number;
   /** Wait before retrying after a failed or timed-out save. Defaults to 2000ms. */
   retryDelay?: number;
+  /** Treat a request with no reply as failed after this long. Defaults to 5000ms. */
+  ackTimeout?: number;
 }
 
 /**
@@ -39,11 +40,12 @@ export class Checkpoints {
   #setStatus: (status: SaveStatus) => void;
   #delay: number;
   #retryDelay: number;
+  #ackTimeout: number;
 
-  /** Bumped on every edit; identifies the current version of the document. */
-  #editVersion = 0;
-  /** The request awaiting a reply, and the edit version it would confirm saved. */
-  #pending: { requestId: string; editVersion: number } | undefined;
+  /** True once the document has been edited since the pending request was sent. */
+  #editedSinceRequest = false;
+  /** The id of the request we are waiting for a reply to. */
+  #pendingRequestId: string | undefined;
   /** Fires the next request after the debounce or retry delay. */
   #requestTimer: ReturnType<typeof setTimeout> | undefined;
   /** Fires if the server never replies to the pending request. */
@@ -56,11 +58,12 @@ export class Checkpoints {
     this.#setStatus = options.status;
     this.#delay = options.delay ?? DEFAULT_DELAY_MS;
     this.#retryDelay = options.retryDelay ?? DEFAULT_RETRY_DELAY_MS;
+    this.#ackTimeout = options.ackTimeout ?? DEFAULT_ACK_TIMEOUT_MS;
   }
 
   /** Call when the document changes locally. */
   changed(): void {
-    this.#editVersion += 1;
+    this.#editedSinceRequest = true;
     this.#setStatus('Unsaved changes');
     this.#scheduleRequest(this.#delay);
   }
@@ -80,9 +83,9 @@ export class Checkpoints {
   /** Call with each stateless payload received from the server. */
   receive(payload: string): void {
     const reply = parseCheckpointReply(payload);
-    if (!reply || !this.#pending || reply.id !== this.#pending.requestId) return;
+    if (!reply || reply.id !== this.#pendingRequestId) return;
 
-    const covered = this.#pending.editVersion === this.#editVersion;
+    const covered = !this.#editedSinceRequest;
     this.#clearPending();
     if (!this.#canSend()) return;
 
@@ -115,19 +118,21 @@ export class Checkpoints {
 
   #sendRequest(): void {
     if (!this.#canSend()) return;
+    this.#clearPending(); // abandon any superseded request and its ack timer
     const requestId = crypto.randomUUID();
-    this.#pending = { requestId, editVersion: this.#editVersion };
+    this.#pendingRequestId = requestId;
+    this.#editedSinceRequest = false;
     this.#setStatus('Saving…');
     this.#send(checkpointRequest(requestId));
     this.#ackTimer = setTimeout(() => {
       this.#clearPending();
       this.#setStatus('Unsaved — retrying');
       this.#scheduleRequest(this.#retryDelay);
-    }, ACK_TIMEOUT_MS);
+    }, this.#ackTimeout);
   }
 
   #clearPending(): void {
-    this.#pending = undefined;
+    this.#pendingRequestId = undefined;
     clearTimeout(this.#ackTimer);
   }
 }

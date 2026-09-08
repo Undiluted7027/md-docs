@@ -20,6 +20,8 @@ export class Persistence {
   #autosaveTimer: ReturnType<typeof setTimeout> | undefined;
   /** True while edits exist that are not captured by a running or finished write. */
   #dirty = false;
+  /** Counts save attempts so a failed one can tell whether a newer save supersedes it. */
+  #saveCount = 0;
   #closing = false;
 
   constructor(store: DocumentStore, reportFailure: () => void) {
@@ -47,11 +49,14 @@ export class Persistence {
     // Encode now: this snapshot covers every edit so far, so the document is
     // clean unless the write fails or a new edit arrives while it runs.
     const snapshot = Y.encodeStateAsUpdate(document);
+    const attempt = ++this.#saveCount;
     this.#dirty = false;
     try {
       await this.#enqueue(() => this.#store.save(id, snapshot));
     } catch (error) {
-      this.#dirty = true;
+      // Re-dirty only if no newer save has taken a snapshot since this one; a
+      // newer save owns the dirty state and may still succeed.
+      if (attempt === this.#saveCount) this.#dirty = true;
       this.#reportFailure();
       this.#scheduleAutosave(RETRY_DELAY_MS);
       throw error;

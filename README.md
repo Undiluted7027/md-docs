@@ -14,9 +14,9 @@ proxy and shutdown checks; use the declared version for development and deployme
 
 1. Run `bun install --frozen-lockfile`.
 2. Start your local Supabase stack if necessary (`bun run db:start`).
-3. Set the local Supabase values in the root `.env`. In particular,
-   `DATABASE_URL` must use your stack's actual Postgres port. See `.env.example`;
-   do not replace existing Supabase settings or reset the stack.
+3. Create `apps/server/.env` from `apps/server/.env.example`. `DATABASE_URL` must
+   use your stack's actual Postgres port (`bunx supabase status`). Do not reset
+   the stack.
 4. Run `bun run db:migrate` to apply the application migration.
 5. Run `bun run dev` and open **http://localhost:5173** in two browser tabs.
 
@@ -26,12 +26,12 @@ port is unavailable. Restart both processes after changing them. Vite uses a
 fixed localhost port of 5173 so the server can enforce that browser origin. Both
 programs run on Bun.
 
-Only `DATABASE_URL` is consumed by this slice. Supabase API keys remain part of
-the local infrastructure environment for later Supabase tooling; the application
-does not read them. Database credentials never enter Vite configuration or the
-browser build. The `md_docs` database schema holds application tables and Drizzle
-migration history, outside the public API schema. The app accepts only
-`poc-document`; it is not ready for public hosting.
+Only `DATABASE_URL` is consumed by this slice. Supabase API keys are not read by
+the application; keep them wherever your Supabase tooling expects them. Database
+credentials never enter Vite configuration or the browser build. The `md_docs`
+database schema holds application tables and Drizzle migration history, outside
+the public API schema. The app accepts only `poc-document`; it is not ready for
+public hosting.
 
 ## Workspace and tooling
 
@@ -52,20 +52,21 @@ Useful root commands:
 - `bun run dev`: run both applications.
 - `bun run lint` / `bun run lint:fix`: inspect / fix lint findings.
 - `bun run typecheck`: check both applications without emitting JavaScript.
-- `bun test`: run the Bun tests, including the database check when `DATABASE_URL` is set.
+- `bun test`: run the Bun tests, including the database check when `DATABASE_URL` is set in the environment.
 - `bun run -F '@md-docs/web' build`: typecheck and build the frontend.
 - `bun run -F '@md-docs/server' start`: run the server without watching files.
 - `bun run db:generate`: generate a migration after an approved schema change.
 - `bun run db:migrate`: apply committed migrations.
 
-Server and migration scripts load both the root infrastructure `.env` and the
-server app's `.env`. `@t3-oss/env-core` and Zod validate those values before the
-server opens a database connection. Vite separately validates its local proxy
-port from `apps/web/.env`; only variables named in that contract are read. Run
-tests from the root so Bun loads the database URL there too. The database test
-creates a unique `test-…` document and removes only that row; it never resets
-Supabase or deletes the development document. Expected injected-failure messages
-appear in the test output.
+Server and migration scripts read `apps/server/.env`, which Bun loads
+automatically from that directory. `@t3-oss/env-core` and Zod validate those
+values before the server opens a database connection. Vite separately validates
+its local proxy port from `apps/web/.env`; only variables named in that contract
+are read. `bun test` does not load that file, so the database-backed test runs
+only when `DATABASE_URL` is already in the environment (`DATABASE_URL=… bun
+test`, or export it first). That test creates a unique `test-…` document and
+removes only that row; it never resets Supabase or deletes the development
+document. Expected injected-failure messages appear in the test output.
 
 ## Save and reconnect behavior
 

@@ -42,7 +42,7 @@ class BrowserSocket extends WebSocket {
 
 // Starts a collaboration server on a random port and returns its WebSocket URL.
 async function start(store: DocumentStore, name = 'poc-document') {
-  const server = await createServer(store, name);
+  const server = await createServer(store, { documentName: name, logger: false });
   const httpAddress = await server.app.listen({ port: 0, host: '127.0.0.1' });
   cleanups.push(() => server.app.close());
   return { ...server, url: httpAddress.replace('http:', 'ws:') + '/collaboration' };
@@ -247,6 +247,21 @@ test('rejects wrong origins and unknown document names', async () => {
   });
   await until(() => rejected);
   expect(a.provider.synced).toBe(false);
+});
+
+test('5xx responses hide the error message unless errors are exposed', async () => {
+  for (const exposeErrors of [true, false]) {
+    const server = await createServer(memoryStore(), { logger: false, exposeErrors });
+    cleanups.push(() => server.app.close());
+    server.app.get('/boom', () => {
+      throw new Error('sensitive detail');
+    });
+
+    const response = await server.app.inject({ method: 'GET', url: '/boom' });
+    expect(response.statusCode).toBe(500);
+    const body = response.json<{ message: string }>();
+    expect(body.message).toBe(exposeErrors ? 'sensitive detail' : 'Internal Server Error');
+  }
 });
 
 const databaseTest = process.env.DATABASE_URL ? test : test.skip;
