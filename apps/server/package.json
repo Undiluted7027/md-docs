@@ -1,0 +1,11 @@
+{
+  "name": "@md-docs/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "bun run --bun tsc --project tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.0"
+  }
+}
