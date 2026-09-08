@@ -47,43 +47,52 @@ Add these environment variables in Render:
 | --- | --- |
 | `DATABASE_URL` | The Supabase Postgres connection string |
 | `HOST` | `0.0.0.0` |
-| `WEB_ORIGIN` | The production Cloudflare Pages origin; update it after creating the Pages project |
+| `WEB_ORIGIN` | The production Cloudflare Pages origin, e.g. `https://md-docs-bwd.pages.dev` |
 | `NODE_ENV` | `production` |
 | `LOG_PRETTY` | `false` |
 
+`WEB_ORIGIN` may be left unset on the first deploy (it falls back to the local
+dev origin, which is harmless while no frontend exists). It **must** be set to the
+exact Cloudflare Pages origin — scheme and host only, no path or trailing slash —
+before the deployed frontend can call the API or open the collaboration socket. A
+mismatch makes every browser request fail with a missing `Access-Control-Allow-Origin`
+header even though the server returns 2xx. Changing it on Render requires a
+redeploy.
+
 Render supplies `PORT`. The committed `.bun-version` selects Bun 1.4.2. Once the
-deployment completes, open `https://YOUR_SERVICE.onrender.com/health` and expect
-`{"status":"ok"}`. This endpoint checks the server process only. It intentionally
-does not query Postgres, so a paused database does not put the service into a
-health-check restart loop.
+deployment completes, open `https://<service>.onrender.com/health` (the reference
+deployment is `https://md-docs.onrender.com`) and expect `{"status":"ok"}`. This
+endpoint checks the server process only. It intentionally does not query Postgres,
+so a paused database does not put the service into a health-check restart loop.
 
 ## 3. Deploy the web app to Cloudflare Pages
 
-Create a Pages project from the same repository.
+Create the project through **Workers & Pages → Create → Pages → Connect to Git**.
+Use the Pages flow specifically. The "import a repository" / Workers flow deploys
+with `wrangler deploy`, which fails in this repository because it cannot run
+project detection at a monorepo root. A classic Pages project uploads the build
+output directory directly and needs no `wrangler` config.
 
 | Setting | Value |
 | --- | --- |
 | Build command | `bun install --frozen-lockfile && bun run -F '@md-docs/web' build` |
 | Build output directory | `apps/web/dist` |
-| Environment variable | `VITE_SERVER_ORIGIN=https://YOUR_SERVICE.onrender.com` |
+| Environment variable | `VITE_SERVER_ORIGIN=https://<service>.onrender.com` (reference: `https://md-docs.onrender.com`) |
 
 `VITE_SERVER_ORIGIN` is public and is compiled into the browser bundle. It must
 contain only the Render origin, with no path or trailing slash. Database
 credentials and other server settings must never use the `VITE_` prefix.
 
-After Cloudflare assigns the production `pages.dev` URL, set that exact origin as
-`WEB_ORIGIN` in Render and redeploy the server. Preview deployments have different
-origins and therefore cannot use the API or WebSocket during this POC.
+After Cloudflare assigns the production `pages.dev` URL (the reference deployment
+is `https://md-docs-bwd.pages.dev`), set that exact origin as `WEB_ORIGIN` in
+Render and redeploy the server. Preview deployments have different origins and
+therefore cannot use the API or WebSocket during this POC.
 
-Hard-load a real `/documents/:id` URL after deployment. Cloudflare Pages normally
-serves `index.html` for an SPA that has no top-level `404.html`. If the hard load
-returns a Cloudflare 404, add `apps/web/public/_redirects` containing:
-
-```text
-/* /index.html 200
-```
-
-Then rebuild and deploy the frontend.
+Hard-load a real `/documents/:id` URL after deployment to confirm SPA routing. A
+classic Pages project with no top-level `404.html` serves `index.html` for
+unmatched paths, so the reference deployment resolves these URLs without extra
+configuration. If a future change makes a hard load return a Cloudflare 404, add
+`apps/web/public/_redirects` containing `/* /index.html 200` and redeploy.
 
 ## 4. Verify the deployed workflow
 
@@ -103,8 +112,11 @@ only non-sensitive documents because document URLs are bearer edit links.
 - Render free web services spin down after 15 minutes without inbound HTTP or
   WebSocket traffic. A new request or WebSocket connection wakes the service and
   can take about one minute. Active WebSocket messages count as traffic.
-- Render grants 750 free instance hours per workspace each month. A scheduled
-  keep-alive would consume nearly the full allowance, so the POC starts without one.
+- A scheduled job on cron-job.org pings `/health` more often than every 15
+  minutes to keep the service warm for the trial. This is a deliberate trade-off:
+  Render grants 750 free instance hours per workspace each month and near-constant
+  uptime consumes almost all of them, leaving little headroom for other services.
+  Remove the cron job to fall back to on-demand cold starts.
 - Render's filesystem is ephemeral. Document state remains in Supabase Postgres.
 - Supabase free projects with low database activity can pause after seven days.
   Resume a paused project from the Supabase dashboard before a trial.
