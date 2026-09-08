@@ -89,17 +89,17 @@ Sharing permissions beyond the edit link belong in [later work](./later-work.md)
 
 The prototype is complete when these scenarios pass:
 
-| Scenario | Required outcome |
-| --- | --- |
-| Create and reopen | A new document has a unique URL; reopening it restores the saved title and exact Markdown source. |
-| Render and export | Supported Markdown renders correctly, unsafe content cannot execute, and export matches the current source. |
-| Join from another browser | A second participant opens the link, chooses a name, and sees the same document and active participants. |
-| Simultaneous edits | Edits at overlapping and separate positions converge to identical content on both clients. |
-| Participant undo | Undoing a local edit does not remove the other participant's independent edits. |
-| Temporary disconnect | With one page disconnected, both participants edit; reconnection merges the changes and both clients converge. |
-| Durable save | After “Saved,” closing all clients and restarting the server preserves the document. |
-| Save failure | A failed persistence operation never shows “Saved”; the user sees pending or failed status and can export their work. |
-| Invalid access | Missing or invalid edit tokens cannot read, mutate, or subscribe to document state. |
+| Scenario                  | Required outcome                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Create and reopen         | A new document has a unique URL; reopening it restores the saved title and exact Markdown source.                     |
+| Render and export         | Supported Markdown renders correctly, unsafe content cannot execute, and export matches the current source.           |
+| Join from another browser | A second participant opens the link, chooses a name, and sees the same document and active participants.              |
+| Simultaneous edits        | Edits at overlapping and separate positions converge to identical content on both clients.                            |
+| Participant undo          | Undoing a local edit does not remove the other participant's independent edits.                                       |
+| Temporary disconnect      | With one page disconnected, both participants edit; reconnection merges the changes and both clients converge.        |
+| Durable save              | After “Saved,” closing all clients and restarting the server preserves the document.                                  |
+| Save failure              | A failed persistence operation never shows “Saved”; the user sees pending or failed status and can export their work. |
+| Invalid access            | Missing or invalid edit tokens cannot read, mutate, or subscribe to document state.                                   |
 
 Use focused automated tests for convergence, persistence acknowledgement, and access checks where practical. Manually verify the two-browser flow, cursor behavior, preview layout, and narrow-screen switching. Avoid tests that simply mirror implementation details.
 

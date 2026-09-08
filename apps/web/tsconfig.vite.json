@@ -4,5 +4,5 @@
     "lib": ["ESNext"],
     "types": ["bun"]
   },
-  "include": ["vite.config.ts"]
+  "include": ["env.config.ts", "vite.config.ts"]
 }

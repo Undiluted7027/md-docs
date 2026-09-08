@@ -1,0 +1,32 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #202020;
+  background: #fafafa;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 960px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+.editor {
+  border: 1px solid #d4d4d4;
+  background: white;
+}
+.cm-editor {
+  min-height: 360px;
+}
+.cm-content {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.note {
+  color: #666;
+  font-size: 13px;
+}
