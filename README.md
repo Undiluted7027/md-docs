@@ -4,6 +4,7 @@ Collaborative Markdown editing, previews, and sharing.
 
 The current proof of concept creates collaborative Markdown documents with private
 edit links. Each document has a shared title, a source editor, a safe live preview,
+named participant presence, remote cursors, participant-local undo and redo,
 automatic saving to Postgres, and reconnection support.
 
 ## Run locally
@@ -40,7 +41,8 @@ non-sensitive documents and retain each document URL.
 
 ## Workspace and tooling
 
-- `apps/web`: document creation, editing, Markdown preview, and the Yjs client.
+- `apps/web`: document creation, editing, Markdown preview, sharing controls,
+  participant presence, and the Yjs client.
 - `apps/server`: document routes, Fastify, Hocuspocus, and Postgres persistence.
 - `packages/protocol`: the checkpoint wire format shared by client and server.
 - `docs`: product specifications and verification notes.

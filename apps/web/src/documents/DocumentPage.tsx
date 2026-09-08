@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { JoinDocument } from '../collaboration/JoinDocument.tsx';
 import { documentExists } from './api.ts';
 import { DocumentEditor } from './DocumentEditor.tsx';
 
@@ -10,6 +11,7 @@ type AccessStatus = 'checking' | 'available' | 'unavailable' | 'error';
 export function DocumentPage({ documentId }: { documentId: string }) {
   const [access, setAccess] = useState<AccessStatus>('checking');
   const [attempt, setAttempt] = useState(0);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +45,8 @@ export function DocumentPage({ documentId }: { documentId: string }) {
       </section>
     );
   }
-  return <DocumentEditor documentName={documentId} />;
+  if (!displayName) return <JoinDocument onJoin={setDisplayName} />;
+  return <DocumentEditor documentName={documentId} displayName={displayName} />;
 }
 
 export function DocumentUnavailable() {

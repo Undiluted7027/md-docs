@@ -42,7 +42,7 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.6;
 }
 
@@ -62,6 +62,85 @@ button:disabled {
   flex: none;
   color: #666;
   font-size: 13px;
+}
+
+.collaboration-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 12px;
+  border: 1px solid #d4d4d4;
+  background: white;
+}
+
+.collaboration-controls h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.collaboration-controls .note {
+  max-width: 300px;
+  margin: 0;
+}
+
+.document-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-button {
+  color: #202020;
+  background: white;
+}
+
+.copy-status {
+  min-width: 116px;
+  color: #666;
+  font-size: 13px;
+}
+
+.participant-list {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.participant-list li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.participant-color {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.join-document {
+  max-width: 420px;
+}
+
+.join-document form {
+  display: grid;
+  gap: 10px;
+}
+
+.join-document input {
+  padding: 10px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.join-document button {
+  justify-self: start;
 }
 
 .document-title {
@@ -128,6 +207,15 @@ button:disabled {
 
   .document-header {
     display: block;
+  }
+
+  .collaboration-controls {
+    display: grid;
+  }
+
+  .document-actions,
+  .participant-list {
+    flex-wrap: wrap;
   }
 
   .document-workspace {

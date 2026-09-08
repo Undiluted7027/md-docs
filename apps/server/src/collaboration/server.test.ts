@@ -64,7 +64,7 @@ function client(url: string, name = TEST_DOCUMENT_ID) {
     url,
     WebSocketPolyfill: BrowserSocket,
   });
-  const provider = new HocuspocusProvider({ websocketProvider, name, document, awareness: null });
+  const provider = new HocuspocusProvider({ websocketProvider, name, document });
   provider.attach();
   cleanups.push(() => {
     provider.destroy();
@@ -72,6 +72,12 @@ function client(url: string, name = TEST_DOCUMENT_ID) {
     document.destroy();
   });
   return { document, provider, websocketProvider, text: document.getText('content') };
+}
+
+function awarenessOf(provider: HocuspocusProvider) {
+  const awareness = provider.awareness;
+  if (!awareness) throw new Error('Expected the client to have awareness enabled');
+  return awareness;
 }
 
 // Asks the server to persist the document and resolves with its reply.
@@ -212,6 +218,53 @@ test('concurrent edits and offline changes converge over real WebSockets', async
   const reopened = client(server.url);
   await until(() => reopened.provider.synced);
   expect(server.collaboration.getConnectionsCount()).toBe(1);
+});
+
+test('presence is shared and removed after a participant disconnects', async () => {
+  const server = await start(memoryStore());
+  const a = client(server.url);
+  const b = client(server.url);
+  const aAwareness = awarenessOf(a.provider);
+  const bAwareness = awarenessOf(b.provider);
+
+  aAwareness.setLocalStateField('user', { name: 'Alex' });
+  bAwareness.setLocalStateField('user', { name: 'Bea' });
+  await until(() => aAwareness.getStates().has(b.document.clientID));
+  expect(aAwareness.getStates().get(b.document.clientID)?.user).toEqual({ name: 'Bea' });
+
+  b.websocketProvider.disconnect();
+  await until(() => !aAwareness.getStates().has(b.document.clientID));
+});
+
+test("undo removes one participant's edit without removing a remote edit", async () => {
+  const server = await start(memoryStore());
+  const a = client(server.url);
+  const b = client(server.url);
+  await until(() => a.provider.synced && b.provider.synced);
+
+  // Mirrors the client's `createDocumentUndoManager`: only edits tagged with the
+  // local origin are undoable, so edits synced in from `b` are never on the
+  // stack. This checks that guarantee holds over a real WebSocket connection.
+  const localOrigin = Symbol('a local edit');
+  const undoManager = new Y.UndoManager(a.text, {
+    trackedOrigins: new Set<unknown>([localOrigin]),
+  });
+  cleanups.push(() => {
+    undoManager.destroy();
+  });
+  a.document.transact(() => {
+    a.text.insert(0, 'Alex ');
+  }, localOrigin);
+  await until(() => b.text.toJSON() === 'Alex ');
+
+  b.document.transact(() => {
+    b.text.insert(b.text.length, 'Bea');
+  });
+  await until(() => a.text.toJSON() === 'Alex Bea');
+  undoManager.undo();
+
+  await until(() => a.text.toJSON() === b.text.toJSON());
+  expect(a.text.toJSON()).toBe('Bea');
 });
 
 test('a failed write is never acknowledged, and the retry includes deletion-only edits', async () => {

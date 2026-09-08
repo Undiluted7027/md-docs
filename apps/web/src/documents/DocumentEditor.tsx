@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SaveStatus } from '../collaboration/checkpoints.ts';
+import { CollaborationControls } from '../collaboration/CollaborationControls.tsx';
+import type { Participant } from '../collaboration/presence.ts';
 import { createEditorSession, type ConnectionStatus } from '../collaboration/session.ts';
 import { MarkdownPreview } from './MarkdownPreview.tsx';
 
-export function DocumentEditor({ documentName }: { documentName: string }) {
+interface DocumentEditorProps {
+  documentName: string;
+  displayName: string;
+}
+
+export function DocumentEditor({ documentName, displayName }: DocumentEditorProps) {
   const container = useRef<HTMLDivElement>(null);
   const session = useRef<ReturnType<typeof createEditorSession>>(null);
   const [connection, setConnection] = useState<ConnectionStatus>('Connecting…');
   const [save, setSave] = useState<SaveStatus>('Unsaved changes');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false });
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -18,10 +27,13 @@ export function DocumentEditor({ documentName }: { documentName: string }) {
     session.current = createEditorSession({
       container: parent,
       documentName,
+      displayName,
       onConnectionStatus: setConnection,
       onSaveStatus: setSave,
       onTitleChange: setTitle,
       onContentChange: setContent,
+      onParticipantsChange: setParticipants,
+      onUndoStateChange: setUndoState,
       onLoaded: () => {
         setLoaded(true);
       },
@@ -30,7 +42,20 @@ export function DocumentEditor({ documentName }: { documentName: string }) {
       session.current?.destroy();
       session.current = null;
     };
-  }, [documentName]);
+  }, [documentName, displayName]);
+
+  // The plain <input> has no CodeMirror keymap, so it mirrors yUndoManagerKeymap
+  // by hand: Ctrl/Cmd-Z undoes, Ctrl/Cmd-Y and Ctrl/Cmd-Shift-Z redo. Both route
+  // to the same shared undo manager the editor and toolbar use.
+  function handleTitleUndo(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'z' && key !== 'y') return;
+
+    event.preventDefault();
+    if (key === 'y' || event.shiftKey) session.current?.redo();
+    else session.current?.undo();
+  }
 
   return (
     <>
@@ -41,11 +66,19 @@ export function DocumentEditor({ documentName }: { documentName: string }) {
           disabled={!loaded}
           value={title}
           onChange={(event) => session.current?.setTitle(event.target.value)}
+          onKeyDown={handleTitleUndo}
         />
         <p role="status">
           {connection} · {save}
         </p>
       </header>
+      <CollaborationControls
+        participants={participants}
+        canUndo={undoState.canUndo}
+        canRedo={undoState.canRedo}
+        onUndo={() => session.current?.undo()}
+        onRedo={() => session.current?.redo()}
+      />
       <div className="document-workspace">
         <section aria-label="Markdown source">
           <h2>Markdown</h2>
@@ -56,7 +89,6 @@ export function DocumentEditor({ documentName }: { documentName: string }) {
           <MarkdownPreview source={content} />
         </section>
       </div>
-      <p className="note">Keep this URL. Anyone with it can read and edit the document.</p>
     </>
   );
 }

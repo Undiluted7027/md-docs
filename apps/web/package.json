@@ -9,12 +9,13 @@
     "typecheck": "bun run --bun tsc --project tsconfig.json && bun run --bun tsc --project tsconfig.vite.json"
   },
   "dependencies": {
+    "@codemirror/commands": "6.11.0",
     "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.12.4",
     "@codemirror/state": "6.7.4",
     "@codemirror/view": "6.43.11",
     "@hocuspocus/provider": "4.6.0",
     "@md-docs/protocol": "workspace:*",
-    "codemirror": "6.0.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "10.1.0",
