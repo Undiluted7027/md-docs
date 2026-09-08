@@ -1,21 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as Y from 'yjs';
 import { documents } from './schema.ts';
-
-// The Yjs update for a brand-new, empty document. Stored as the initial state on
-// creation so that `load` always returns a valid update. Built once via Yjs
-// rather than hard-coding the encoded bytes.
-const EMPTY_DOCUMENT_STATE = Y.encodeStateAsUpdate(new Y.Doc());
 
 export function openDatabase(url: string) {
   const client = postgres(url, { max: 2, connect_timeout: 5, idle_timeout: 20 });
   const db = drizzle(client);
   return {
     /** Creates the document if it does not exist yet. Safe to call repeatedly. */
-    async create(id: string) {
-      await db.insert(documents).values({ id, state: EMPTY_DOCUMENT_STATE }).onConflictDoNothing();
+    async create(id: string, state: Uint8Array) {
+      await db.insert(documents).values({ id, state }).onConflictDoNothing();
     },
     /** Returns the stored state, or null when no such document exists. */
     async load(id: string) {

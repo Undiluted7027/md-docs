@@ -4,9 +4,11 @@ import * as Y from 'yjs';
 import { createServer } from './server.ts';
 import { openDatabase, type DocumentStore } from './database.ts';
 import { checkpointRequest, parseCheckpointReply } from '@md-docs/protocol';
+import { createInitialDocumentState, DEFAULT_DOCUMENT_TITLE } from '../documents/document.ts';
 
 const TIMEOUT_MS = 5000;
 const POLL_MS = 10;
+const TEST_DOCUMENT_ID = '00000000-0000-4000-8000-000000000001';
 
 // Cleanups run in reverse registration order after each test, so a helper can
 // register its own teardown right where it sets a resource up.
@@ -33,6 +35,12 @@ function decode(state: Uint8Array): string {
   return text;
 }
 
+async function storedText(store: DocumentStore, id: string): Promise<string> {
+  const state = await store.load(id);
+  if (!state) throw new Error(`Expected stored state for ${id}`);
+  return decode(state);
+}
+
 // Browsers send an Origin header; the server only accepts the dev web origin.
 class BrowserSocket extends WebSocket {
   constructor(url: string) {
@@ -41,15 +49,16 @@ class BrowserSocket extends WebSocket {
 }
 
 // Starts a collaboration server on a random port and returns its WebSocket URL.
-async function start(store: DocumentStore, name = 'poc-document') {
-  const server = await createServer(store, { documentName: name, logger: false });
+async function start(store: DocumentStore, name = TEST_DOCUMENT_ID) {
+  await store.create(name, createInitialDocumentState());
+  const server = await createServer(store, { logger: false });
   const httpAddress = await server.app.listen({ port: 0, host: '127.0.0.1' });
   cleanups.push(() => server.app.close());
   return { ...server, url: httpAddress.replace('http:', 'ws:') + '/collaboration' };
 }
 
 // Connects a client to the server, like a browser tab would.
-function client(url: string, name = 'poc-document') {
+function client(url: string, name = TEST_DOCUMENT_ID) {
   const document = new Y.Doc();
   const websocketProvider = new HocuspocusProviderWebsocket({
     url,
@@ -89,12 +98,18 @@ async function checkpoint(provider: HocuspocusProvider): Promise<'saved' | 'save
 // An in-memory document store. `load` returns whatever the last successful
 // `save` wrote, so tests can read persisted state back through it.
 function memoryStore() {
-  let state = new Uint8Array([0, 0]);
+  const states = new Map<string, Uint8Array>();
   return {
-    create: () => Promise.resolve(),
-    load: () => Promise.resolve(state),
-    save: (_id: string, next: Uint8Array) => {
-      state = new Uint8Array(next);
+    create: (id: string, state: Uint8Array) => {
+      if (!states.has(id)) states.set(id, new Uint8Array(state));
+      return Promise.resolve();
+    },
+    load: (id: string) => {
+      const state = states.get(id);
+      return Promise.resolve(state ? new Uint8Array(state) : null);
+    },
+    save: (id: string, next: Uint8Array) => {
+      states.set(id, new Uint8Array(next));
       return Promise.resolve();
     },
   };
@@ -212,11 +227,11 @@ test('a failed write is never acknowledged, and the retry includes deletion-only
   faulty.setFailing(true);
   a.text.delete(4, 7); // removes ' delete', leaving 'keep'
   expect(await checkpoint(a.provider)).toBe('save-failed');
-  expect(decode(await base.load())).toBe('keep delete'); // unchanged by the failed write
+  expect(await storedText(base, TEST_DOCUMENT_ID)).toBe('keep delete'); // unchanged by failed write
 
   faulty.setFailing(false);
   expect(await checkpoint(a.provider)).toBe('saved');
-  expect(decode(await base.load())).toBe('keep'); // the deletion is persisted on retry
+  expect(await storedText(base, TEST_DOCUMENT_ID)).toBe('keep'); // deletion persisted on retry
 });
 
 test('load failure never completes initial synchronization', async () => {
@@ -243,13 +258,29 @@ test('rejects wrong origins and unknown document names', async () => {
   });
   expect(response.statusCode).toBe(403);
 
-  const a = client(server.url, 'another-document');
+  const a = client(server.url, crypto.randomUUID());
   let rejected = false;
   a.provider.on('authenticationFailed', () => {
     rejected = true;
   });
   await until(() => rejected);
   expect(a.provider.synced).toBe(false);
+});
+
+test('documents have isolated collaborative state', async () => {
+  const store = memoryStore();
+  const server = await start(store);
+  const secondId = crypto.randomUUID();
+  await store.create(secondId, createInitialDocumentState());
+
+  const firstClient = client(server.url);
+  const secondClient = client(server.url, secondId);
+  await until(() => firstClient.provider.synced && secondClient.provider.synced);
+
+  expect(firstClient.document.getText('title').toJSON()).toBe(DEFAULT_DOCUMENT_TITLE);
+  firstClient.text.insert(0, 'first document only');
+  await until(() => !firstClient.provider.hasUnsyncedChanges);
+  expect(secondClient.text.toJSON()).toBe('');
 });
 
 test('5xx responses hide the error message unless errors are exposed', async () => {
@@ -272,7 +303,7 @@ databaseTest('local Supabase restores acknowledged state after server replacemen
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL required');
   const database = openDatabase(url);
-  const name = `test-${crypto.randomUUID()}`;
+  const name = crypto.randomUUID();
   cleanups.push(async () => {
     await database.remove(name);
     await database.close();
@@ -281,6 +312,8 @@ databaseTest('local Supabase restores acknowledged state after server replacemen
   const first = await start(database, name);
   const a = client(first.url, name);
   await until(() => a.provider.synced);
+  a.document.getText('title').delete(0, DEFAULT_DOCUMENT_TITLE.length);
+  a.document.getText('title').insert(0, 'Persistent title');
   a.text.insert(0, 'survives restart');
   expect(await checkpoint(a.provider)).toBe('saved');
 
@@ -290,6 +323,7 @@ databaseTest('local Supabase restores acknowledged state after server replacemen
   const second = await start(database, name);
   const b = client(second.url, name);
   await until(() => b.provider.synced);
+  expect(b.document.getText('title').toJSON()).toBe('Persistent title');
   expect(b.text.toJSON()).toBe('survives restart');
 });
 
@@ -326,7 +360,7 @@ test('a checkpoint is acknowledged only after commit, and a queued snapshot cann
   }
 
   expect(blocking.maxConcurrent).toBe(1);
-  expect(decode(await base.load())).toBe('older newer');
+  expect(await storedText(base, TEST_DOCUMENT_ID)).toBe('older newer');
 });
 
 test('autosave retries on its own and keeps state after the last client leaves', async () => {
@@ -346,5 +380,5 @@ test('autosave retries on its own and keeps state after the last client leaves',
 
   faulty.setFailing(false);
   await until(() => faulty.successes > 0); // a retry succeeded with no client connected
-  expect(decode(await base.load())).toBe('pending after disconnect');
+  expect(await storedText(base, TEST_DOCUMENT_ID)).toBe('pending after disconnect');
 });

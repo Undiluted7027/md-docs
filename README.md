@@ -2,9 +2,9 @@
 
 Collaborative Markdown editing, previews, and sharing.
 
-POC 1 provides one local development document with simultaneous editing, automatic
-saving to Postgres, and reconnection. Preview, document creation, and sharing UI
-are later slices.
+The current proof of concept creates collaborative Markdown documents with private
+edit links. Each document has a shared title, a source editor, a safe live preview,
+automatic saving to Postgres, and reconnection support.
 
 ## Run locally
 
@@ -18,7 +18,8 @@ proxy and shutdown checks; use the declared version for development and deployme
    use your stack's actual Postgres port (`bunx supabase status`). Do not reset
    the stack.
 4. Run `bun run db:migrate` to apply the application migration.
-5. Run `bun run dev` and open **http://localhost:5173** in two browser tabs.
+5. Run `bun run dev` and open **http://localhost:5173**. Create a document, then
+   open its URL in another browser tab to collaborate.
 
 The server binds to `127.0.0.1:3001` by default. Change `PORT` in
 `apps/server/.env` and the matching `SERVER_PORT` in `apps/web/.env` when that
@@ -30,13 +31,17 @@ Only `DATABASE_URL` is consumed by this slice. Supabase API keys are not read by
 the application; keep them wherever your Supabase tooling expects them. Database
 credentials never enter Vite configuration or the browser build. The `md_docs`
 database schema holds application tables and Drizzle migration history, outside
-the public API schema. The app accepts only `poc-document`; it is not ready for
-public hosting.
+the public API schema.
+
+Document IDs are random UUIDs and act as bearer edit tokens. The server accepts
+only existing UUID document IDs over HTTP and WebSocket. There are no accounts,
+permissions, token revocation, or document recovery yet, so use the POC only for
+non-sensitive documents and retain each document URL.
 
 ## Workspace and tooling
 
-- `apps/web`: React, Vite, CodeMirror, and the Yjs client.
-- `apps/server`: Fastify, Hocuspocus, and Drizzle with the Postgres driver.
+- `apps/web`: document creation, editing, Markdown preview, and the Yjs client.
+- `apps/server`: document routes, Fastify, Hocuspocus, and Postgres persistence.
 - `packages/protocol`: the checkpoint wire format shared by client and server.
 - `docs`: product specifications and verification notes.
 
@@ -64,11 +69,12 @@ Server and migration scripts read `apps/server/.env`, which Bun loads
 automatically from that directory. `@t3-oss/env-core` and Zod validate those
 values before the server opens a database connection. Vite separately validates
 its local proxy port from `apps/web/.env`; only variables named in that contract
-are read. `bun test` does not load that file, so the database-backed test runs
-only when `DATABASE_URL` is already in the environment (`DATABASE_URL=… bun
-test`, or export it first). That test creates a unique `test-…` document and
-removes only that row; it never resets Supabase or deletes the development
-document. Expected injected-failure messages appear in the test output.
+are read. Vite proxies `/api` and `/collaboration` to the same Fastify server.
+`bun test` does not load the server environment file, so the database-backed test
+runs only when `DATABASE_URL` is already in the environment (`DATABASE_URL=… bun
+test`, or export it first). That test creates a unique document and removes only
+that row; it never resets Supabase or deletes unrelated data. Expected
+injected-failure messages appear in the test output.
 
 ## Save and reconnect behavior
 
@@ -77,17 +83,19 @@ checkpoint covering the current edits committed to Postgres. A newer edit or a
 disconnect invalidates that indication. Failed saves retry automatically.
 
 Do not close or reload a tab with unsaved offline edits: cross-session offline
-storage is outside POC 1. Closing an already-saved tab and restarting the server
+storage is outside the POC. Closing an already-saved tab and restarting the server
 preserves its content.
 
-For the manual check, write in both tabs, wait for “Saved,” stop the server, and
-make different edits in each open tab. Restart the server and verify both edits
-appear in both tabs. Then wait for “Saved,” close both tabs, restart the server,
-and reopen the page to verify persistence. Never stop or reset the database for
-this demonstration.
+For the manual check, create a document, change its title, and write Markdown that
+includes a table. Open the edit URL in another tab, confirm the exact title and
+source appear, and make an edit there. Verify the first tab and preview update.
+After “Saved” appears, restart the application server and open the URL in a fresh
+tab. The title and source should be restored exactly. An invalid document URL
+must show “Document unavailable.” Never stop or reset the database for this check.
 
 ## Product documents
 
 - [Proof-of-concept spec](docs/poc-spec.md)
 - [Later work](docs/later-work.md)
 - [POC 1 verification](docs/poc-1-verification.md)
+- [POC 2 verification](docs/poc-2-verification.md)

@@ -11,9 +11,10 @@ import * as Y from 'yjs';
 import type { DocumentStore } from './database.ts';
 import { Persistence } from './persistence.ts';
 import { checkpointReply, parseCheckpointRequest } from '@md-docs/protocol';
+import { isDocumentId } from '../documents/document.ts';
+import { registerDocumentRoutes } from '../documents/routes.ts';
 
 interface CreateServerOptions {
-  documentName?: string;
   allowedOrigin?: string;
   /** Fastify logger config. On by default; tests pass `false` to stay quiet. */
   logger?: FastifyServerOptions['logger'];
@@ -22,12 +23,7 @@ interface CreateServerOptions {
 }
 
 export async function createServer(store: DocumentStore, options: CreateServerOptions = {}) {
-  const {
-    documentName = 'poc-document',
-    allowedOrigin = 'http://localhost:5173',
-    logger = true,
-    exposeErrors = true,
-  } = options;
+  const { allowedOrigin = 'http://localhost:5173', logger = true, exposeErrors = true } = options;
   const app = Fastify({ logger });
 
   // Log every unhandled route error and return a consistent JSON body. In
@@ -42,21 +38,17 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
       message: statusCode >= 500 && !exposeErrors ? label : error.message,
     });
   });
-  // The POC serves a single well-known document. Until an explicit create flow
-  // exists, ensure its row is present so the first client can load it.
-  await store.create(documentName);
-  const persistence = new Persistence(store, () => {
-    app.log.error('Document persistence failed; retrying.');
+  const persistence = new Persistence(store, (id) => {
+    app.log.error({ documentName: id }, 'Document persistence failed; retrying.');
   });
   const collaboration = new Hocuspocus({
     quiet: true,
     // Hocuspocus requires every hook to return a promise. A rejected promise
     // rejects the action (the connection, the unload); a resolved one allows it.
-    onAuthenticate({ documentName: requested }) {
-      if (requested !== documentName) {
-        return Promise.reject(new Error('Document unavailable'));
+    async onAuthenticate({ documentName }) {
+      if (!isDocumentId(documentName) || !(await store.load(documentName))) {
+        throw new Error('Document unavailable');
       }
-      return Promise.resolve();
     },
     async onLoadDocument({ documentName: id, document }) {
       const state = await store.load(id);
@@ -68,11 +60,15 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
       persistence.changed(id, document);
       return Promise.resolve();
     },
-    beforeUnloadDocument() {
+    beforeUnloadDocument({ documentName }) {
       // Retain unsaved state so a database failure cannot discard disconnected edits.
-      if (persistence.dirty) {
+      if (persistence.isDirty(documentName)) {
         return Promise.reject(new Error('Document has unsaved changes'));
       }
+      return Promise.resolve();
+    },
+    afterUnloadDocument({ documentName }) {
+      persistence.forget(documentName);
       return Promise.resolve();
     },
     async onStateless({ payload, document, documentName: id, connection }) {
@@ -94,6 +90,7 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
       done();
     },
   });
+  registerDocumentRoutes(app, store);
   app.get('/health', () => ({ status: 'ok' }));
   app.get(
     '/collaboration',

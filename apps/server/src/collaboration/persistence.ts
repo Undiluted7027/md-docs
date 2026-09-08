@@ -9,41 +9,47 @@ const RETRY_DELAY_MS = 2000;
  * retries and the shutdown flush all run through one serialized queue, so a slow
  * or failed write can never be overtaken by an older snapshot.
  *
- * Progress is two counters: `#changeSequence` advances on every edit;
- * `#committedSequence` catches up to the sequence a snapshot held once that
- * snapshot is durably written. The document is dirty while the second trails the
- * first.
+ * Each document has two counters: `changeSequence` advances on every edit and
+ * `committedSequence` catches up when a snapshot is durably written. A document
+ * is dirty while its committed sequence trails its change sequence.
+ *
+ * The queue is shared across every document, not one queue per document. That
+ * keeps the ordering guarantee trivial to reason about, but it also means a slow
+ * or stuck write to one document holds up saves for all the others. This is fine
+ * at proof-of-concept scale and is tracked for a per-document queue later.
  */
 export class Persistence {
   #store: DocumentStore;
-  #reportFailure: () => void;
-
-  /** The most recent document we have been asked to persist. */
-  #latest: { id: string; document: Y.Doc } | undefined;
-  /** Advances on every edit. */
-  #changeSequence = 0;
-  /** The newest change sequence that has been durably committed. */
-  #committedSequence = 0;
+  #reportFailure: (id: string) => void;
+  #documents = new Map<string, DocumentSaveState>();
   /** Tail of the write queue. Each new write runs after this resolves. */
   #queue: Promise<void> = Promise.resolve();
-  #autosaveTimer: ReturnType<typeof setTimeout> | undefined;
   #closing = false;
 
-  constructor(store: DocumentStore, reportFailure: () => void) {
+  constructor(store: DocumentStore, reportFailure: (id: string) => void) {
     this.#store = store;
     this.#reportFailure = reportFailure;
   }
 
-  /** True while the latest edits have not been durably persisted. */
-  get dirty(): boolean {
-    return this.#committedSequence < this.#changeSequence;
+  /** Whether one document has edits that are not durably persisted. */
+  isDirty(id: string): boolean {
+    const state = this.#documents.get(id);
+    return state ? isDirty(state) : false;
+  }
+
+  /** Releases bookkeeping after Hocuspocus unloads a saved document. */
+  forget(id: string): void {
+    const state = this.#documents.get(id);
+    if (!state || isDirty(state)) return;
+    clearTimeout(state.autosaveTimer);
+    this.#documents.delete(id);
   }
 
   /** Records a document change and schedules an autosave. */
   changed(id: string, document: Y.Doc): void {
-    this.#latest = { id, document };
-    this.#changeSequence += 1;
-    this.#scheduleAutosave(AUTOSAVE_DELAY_MS);
+    const state = this.#stateFor(id, document);
+    state.changeSequence += 1;
+    this.#scheduleAutosave(id, AUTOSAVE_DELAY_MS);
   }
 
   /**
@@ -51,16 +57,17 @@ export class Persistence {
    * committed it. Rejects if the write fails so callers can report it.
    */
   async save(id: string, document: Y.Doc): Promise<void> {
-    const sequence = this.#changeSequence;
+    const state = this.#stateFor(id, document);
+    const sequence = state.changeSequence;
     const snapshot = Y.encodeStateAsUpdate(document);
     try {
       await this.#enqueue(async () => {
         await this.#store.save(id, snapshot);
-        this.#committedSequence = Math.max(this.#committedSequence, sequence);
+        state.committedSequence = Math.max(state.committedSequence, sequence);
       });
     } catch (error) {
-      this.#reportFailure();
-      this.#scheduleAutosave(RETRY_DELAY_MS);
+      this.#reportFailure(id);
+      this.#scheduleAutosave(id, RETRY_DELAY_MS);
       throw error;
     }
   }
@@ -72,12 +79,24 @@ export class Persistence {
    */
   async close(): Promise<void> {
     this.#closing = true;
-    clearTimeout(this.#autosaveTimer);
+    for (const state of this.#documents.values()) clearTimeout(state.autosaveTimer);
     await this.#queue;
-    while (this.#latest && this.dirty) {
-      await this.save(this.#latest.id, this.#latest.document);
-      await this.#queue;
+
+    let failure: Error | undefined;
+    for (const [id, state] of this.#documents) {
+      while (isDirty(state)) {
+        try {
+          await this.save(id, state.document);
+        } catch (error) {
+          failure ??=
+            error instanceof Error
+              ? error
+              : new Error('Document persistence failed', { cause: error });
+          break;
+        }
+      }
     }
+    if (failure) throw failure;
   }
 
   /**
@@ -91,13 +110,37 @@ export class Persistence {
     return result;
   }
 
-  #scheduleAutosave(delay: number): void {
-    clearTimeout(this.#autosaveTimer);
+  #scheduleAutosave(id: string, delay: number): void {
+    const state = this.#documents.get(id);
+    if (!state) return;
+
+    clearTimeout(state.autosaveTimer);
     if (this.#closing) return;
-    this.#autosaveTimer = setTimeout(() => {
-      if (this.#latest) {
-        void this.save(this.#latest.id, this.#latest.document).catch(() => {});
-      }
+    state.autosaveTimer = setTimeout(() => {
+      void this.save(id, state.document).catch(() => {});
     }, delay);
   }
+
+  #stateFor(id: string, document: Y.Doc): DocumentSaveState {
+    const existing = this.#documents.get(id);
+    if (existing) {
+      existing.document = document;
+      return existing;
+    }
+
+    const state = { document, changeSequence: 0, committedSequence: 0 };
+    this.#documents.set(id, state);
+    return state;
+  }
+}
+
+interface DocumentSaveState {
+  document: Y.Doc;
+  changeSequence: number;
+  committedSequence: number;
+  autosaveTimer?: ReturnType<typeof setTimeout>;
+}
+
+function isDirty(state: DocumentSaveState): boolean {
+  return state.committedSequence < state.changeSequence;
 }

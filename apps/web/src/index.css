@@ -7,7 +7,7 @@ body {
   margin: 0;
 }
 main {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 48px auto;
   padding: 0 24px;
 }
@@ -20,7 +20,7 @@ h1 {
   background: white;
 }
 .cm-editor {
-  min-height: 360px;
+  min-height: 520px;
 }
 .cm-content {
   font-size: 15px;
@@ -29,4 +29,113 @@ h1 {
 .note {
   color: #666;
   font-size: 13px;
+}
+
+button {
+  padding: 10px 16px;
+  border: 1px solid #202020;
+  border-radius: 4px;
+  color: white;
+  background: #202020;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.create-document {
+  max-width: 520px;
+}
+
+.document-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.document-header p {
+  flex: none;
+  color: #666;
+  font-size: 13px;
+}
+
+.document-title {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.document-title:focus {
+  border-bottom-color: #999;
+  outline: 0;
+}
+
+.document-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.document-workspace h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.preview {
+  min-height: 488px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+  border: 1px solid #d4d4d4;
+  background: white;
+  line-height: 1.6;
+}
+
+.preview > :first-child {
+  margin-top: 0;
+}
+
+.preview pre {
+  overflow-x: auto;
+  padding: 12px;
+  background: #f2f2f2;
+}
+
+.preview table {
+  border-collapse: collapse;
+}
+
+.preview th,
+.preview td {
+  padding: 6px 10px;
+  border: 1px solid #d4d4d4;
+}
+
+@media (max-width: 760px) {
+  main {
+    margin-top: 24px;
+  }
+
+  .document-header {
+    display: block;
+  }
+
+  .document-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .cm-editor,
+  .preview {
+    min-height: 360px;
+  }
 }

@@ -91,7 +91,7 @@ test('writes are serialized and a queued snapshot never overwrites a newer one',
 
   expect(fake.maxConcurrent).toBe(1);
   expect(fake.writes.at(-1)).toBe('older newer');
-  expect(persistence.dirty).toBe(false);
+  expect(persistence.isDirty('doc')).toBe(false);
 });
 
 test('a failed save rejects and leaves the document dirty', async () => {
@@ -106,7 +106,7 @@ test('a failed save rejects and leaves the document dirty', async () => {
     (reason: unknown) => reason,
   );
   expect(error).toBeInstanceOf(Error);
-  expect(persistence.dirty).toBe(true);
+  expect(persistence.isDirty('doc')).toBe(true);
 });
 
 test('a later successful save clears the dirty state left by an earlier failure', async () => {
@@ -117,12 +117,27 @@ test('a later successful save clears the dirty state left by an earlier failure'
   persistence.changed('doc', doc);
   fake.setFailing(true);
   await persistence.save('doc', doc).catch(() => {});
-  expect(persistence.dirty).toBe(true);
+  expect(persistence.isDirty('doc')).toBe(true);
 
   fake.setFailing(false);
   await persistence.save('doc', doc);
-  expect(persistence.dirty).toBe(false);
+  expect(persistence.isDirty('doc')).toBe(false);
   expect(fake.writes.at(-1)).toBe('one');
+});
+
+test('saving one document does not mark another document as saved', async () => {
+  const fake = fakeStore();
+  const persistence = new Persistence(fake.store, () => {});
+  const first = docWith('first');
+  const second = docWith('second');
+
+  persistence.changed('first', first);
+  persistence.changed('second', second);
+  await persistence.save('first', first);
+
+  expect(persistence.isDirty('first')).toBe(false);
+  expect(persistence.isDirty('second')).toBe(true);
+  await persistence.close();
 });
 
 test('close() rejects when the final write cannot be persisted', async () => {
@@ -143,7 +158,7 @@ test('close() rejects when the final write cannot be persisted', async () => {
     (reason: unknown) => reason,
   );
   expect(error).toBeInstanceOf(Error);
-  expect(persistence.dirty).toBe(true);
+  expect(persistence.isDirty('doc')).toBe(true);
   await autosave;
 });
 
@@ -156,5 +171,5 @@ test('close() flushes a pending change and then resolves', async () => {
   await persistence.close();
 
   expect(fake.writes.at(-1)).toBe('final edit');
-  expect(persistence.dirty).toBe(false);
+  expect(persistence.isDirty('doc')).toBe(false);
 });

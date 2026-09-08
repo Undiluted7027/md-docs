@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = createWebConfigEnv({
     SERVER_PORT: process.env.SERVER_PORT ?? loadedEnv.SERVER_PORT,
   });
+  const serverTarget = `http://127.0.0.1:${String(env.SERVER_PORT)}`;
 
   return {
     plugins: [react()],
@@ -15,8 +16,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
+        '/api': {
+          target: serverTarget,
+        },
         '/collaboration': {
-          target: `http://127.0.0.1:${String(env.SERVER_PORT)}`,
+          target: serverTarget,
           ws: true,
         },
       },
