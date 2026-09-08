@@ -6,24 +6,18 @@ const RETRY_DELAY_MS = 2000;
 
 /**
  * Owns every write to the document store. Autosaves, explicit checkpoint saves,
- * retries and the shutdown flush all run through one serialized queue, so a slow
- * or failed write can never be overtaken by an older snapshot.
+ * retries and the shutdown flush run through a serialized queue for that document,
+ * so a slow or failed write can never be overtaken by a newer snapshot of the same
+ * document. Different documents can save independently.
  *
  * Each document has two counters: `changeSequence` advances on every edit and
  * `committedSequence` catches up when a snapshot is durably written. A document
  * is dirty while its committed sequence trails its change sequence.
- *
- * The queue is shared across every document, not one queue per document. That
- * keeps the ordering guarantee trivial to reason about, but it also means a slow
- * or stuck write to one document holds up saves for all the others. This is fine
- * at proof-of-concept scale and is tracked for a per-document queue later.
  */
 export class Persistence {
   #store: DocumentStore;
   #reportFailure: (id: string) => void;
   #documents = new Map<string, DocumentSaveState>();
-  /** Tail of the write queue. Each new write runs after this resolves. */
-  #queue: Promise<void> = Promise.resolve();
   #closing = false;
 
   constructor(store: DocumentStore, reportFailure: (id: string) => void) {
@@ -37,12 +31,28 @@ export class Persistence {
     return state ? isDirty(state) : false;
   }
 
-  /** Releases bookkeeping after Hocuspocus unloads a saved document. */
+  /**
+   * Releases bookkeeping after Hocuspocus unloads a saved document.
+   *
+   * A redundant write may still be running on the queue. Deleting the state now
+   * would let a quick reopen build a second queue for the same id, and the old
+   * write could then land after a newer snapshot. So the state stays in the map
+   * until its queue drains; a reopen in the meantime reuses it (see `#stateFor`)
+   * and keeps every write for the id strictly ordered.
+   */
   forget(id: string): void {
     const state = this.#documents.get(id);
     if (!state || isDirty(state)) return;
     clearTimeout(state.autosaveTimer);
-    this.#documents.delete(id);
+
+    const unloadedDocument = state.document;
+    void state.queue.then(() => {
+      const current = this.#documents.get(id);
+      // Only drop it if nothing reopened onto this state in the meantime.
+      if (current === state && current.document === unloadedDocument && !isDirty(current)) {
+        this.#documents.delete(id);
+      }
+    });
   }
 
   /** Records a document change and schedules an autosave. */
@@ -61,7 +71,7 @@ export class Persistence {
     const sequence = state.changeSequence;
     const snapshot = Y.encodeStateAsUpdate(document);
     try {
-      await this.#enqueue(async () => {
+      await this.#enqueue(state, async () => {
         await this.#store.save(id, snapshot);
         state.committedSequence = Math.max(state.committedSequence, sequence);
       });
@@ -73,40 +83,46 @@ export class Persistence {
   }
 
   /**
-   * Flushes any unsaved change, then waits for the queue to drain. Keeps
+   * Waits for every document queue, then flushes any unsaved changes. Keeps
    * flushing until the latest edits are committed; a write that fails here
    * rejects, so shutdown surfaces the lost data instead of reporting success.
+   *
+   * This flushes documents in parallel. The database pool (see `openDatabase`,
+   * `max: 2`) bounds how many writes actually run at once, so no extra limiting
+   * is needed here.
    */
   async close(): Promise<void> {
     this.#closing = true;
     for (const state of this.#documents.values()) clearTimeout(state.autosaveTimer);
-    await this.#queue;
 
-    let failure: Error | undefined;
-    for (const [id, state] of this.#documents) {
-      while (isDirty(state)) {
-        try {
-          await this.save(id, state.document);
-        } catch (error) {
-          failure ??=
-            error instanceof Error
+    await Promise.all([...this.#documents.values()].map((state) => state.queue));
+
+    const failures = await Promise.all(
+      [...this.#documents].map(async ([id, state]) => {
+        while (isDirty(state)) {
+          try {
+            await this.save(id, state.document);
+          } catch (error) {
+            return error instanceof Error
               ? error
               : new Error('Document persistence failed', { cause: error });
-          break;
+          }
         }
-      }
-    }
+        return undefined;
+      }),
+    );
+    const failure = failures.find((error) => error !== undefined);
     if (failure) throw failure;
   }
 
   /**
-   * Chains `write` onto the queue. The returned promise carries the write's
-   * result to the caller; the queue tail swallows rejections so later writes
-   * still run.
+   * Chains `write` onto one document's queue. The returned promise carries the
+   * write's result to the caller; the queue tail swallows rejections so later
+   * writes for that document still run.
    */
-  #enqueue(write: () => Promise<void>): Promise<void> {
-    const result = this.#queue.then(write);
-    this.#queue = result.catch(() => {});
+  #enqueue(state: DocumentSaveState, write: () => Promise<void>): Promise<void> {
+    const result = state.queue.then(write);
+    state.queue = result.catch(() => {});
     return result;
   }
 
@@ -128,7 +144,12 @@ export class Persistence {
       return existing;
     }
 
-    const state = { document, changeSequence: 0, committedSequence: 0 };
+    const state = {
+      document,
+      changeSequence: 0,
+      committedSequence: 0,
+      queue: Promise.resolve(),
+    };
     this.#documents.set(id, state);
     return state;
   }
@@ -138,6 +159,8 @@ interface DocumentSaveState {
   document: Y.Doc;
   changeSequence: number;
   committedSequence: number;
+  /** Tail of this document's write queue. */
+  queue: Promise<void>;
   autosaveTimer?: ReturnType<typeof setTimeout>;
 }
 

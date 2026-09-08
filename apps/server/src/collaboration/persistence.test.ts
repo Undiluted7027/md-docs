@@ -2,16 +2,17 @@ import { expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Persistence } from './persistence.ts';
 
-// A store that records writes, can fail on demand, and can block the first write
-// on a gate so a test can observe an in-flight save.
+// A store that records writes, can fail on demand, and can block one chosen
+// write on a gate so a test can observe an in-flight save.
 function fakeStore() {
   const writes: string[] = [];
   let failing = false;
   let concurrent = 0;
   let maxConcurrent = 0;
+  let writeCount = 0;
+  let blockAtWrite = 0; // 0 = block nothing
   const gate = Promise.withResolvers<undefined>();
-  let blockFirst = false;
-  let first = true;
+  const blockedWriteStarted = Promise.withResolvers<undefined>();
 
   return {
     store: {
@@ -21,10 +22,11 @@ function fakeStore() {
         return Promise.resolve(last === undefined ? new Uint8Array([0, 0]) : encode(last));
       },
       async save(_id: string, state: Uint8Array) {
+        writeCount += 1;
         concurrent += 1;
         maxConcurrent = Math.max(maxConcurrent, concurrent);
-        if (blockFirst && first) {
-          first = false;
+        if (writeCount === blockAtWrite) {
+          blockedWriteStarted.resolve(undefined);
           await gate.promise;
         }
         if (failing) {
@@ -36,6 +38,7 @@ function fakeStore() {
       },
     },
     writes,
+    blockedWriteStarted: blockedWriteStarted.promise,
     get maxConcurrent() {
       return maxConcurrent;
     },
@@ -43,9 +46,12 @@ function fakeStore() {
       failing = value;
     },
     blockFirstWrite: () => {
-      blockFirst = true;
+      blockAtWrite = 1;
     },
-    releaseFirstWrite: () => {
+    blockWriteAt: (n: number) => {
+      blockAtWrite = n;
+    },
+    releaseBlockedWrite: () => {
       gate.resolve(undefined);
     },
   };
@@ -86,12 +92,70 @@ test('writes are serialized and a queued snapshot never overwrites a newer one',
   persistence.changed('doc', doc);
   const second = persistence.save('doc', doc);
 
-  fake.releaseFirstWrite();
+  fake.releaseBlockedWrite();
   await Promise.all([first, second]);
 
   expect(fake.maxConcurrent).toBe(1);
   expect(fake.writes.at(-1)).toBe('older newer');
   expect(persistence.isDirty('doc')).toBe(false);
+});
+
+test('a blocked write for one document does not delay another document', async () => {
+  const fake = fakeStore();
+  fake.blockFirstWrite();
+  const persistence = new Persistence(fake.store, () => {});
+  const blockedDocument = docWith('blocked document');
+  const otherDocument = docWith('other document');
+
+  persistence.changed('blocked', blockedDocument);
+  const blockedSave = persistence.save('blocked', blockedDocument);
+  await fake.blockedWriteStarted;
+
+  persistence.changed('other', otherDocument);
+  const otherSave = persistence.save('other', otherDocument);
+
+  try {
+    const outcome = await Promise.race([
+      otherSave.then(() => 'saved' as const),
+      Bun.sleep(100).then(() => 'timed out' as const),
+    ]);
+    expect(outcome).toBe('saved');
+    expect(fake.writes).toEqual(['other document']);
+    expect(fake.maxConcurrent).toBe(2);
+  } finally {
+    fake.releaseBlockedWrite();
+    await Promise.all([blockedSave, otherSave]);
+    await persistence.close();
+  }
+});
+
+test('a document reopened while its previous write drains is not overwritten by the stale snapshot', async () => {
+  const fake = fakeStore();
+  fake.blockWriteAt(2); // let the first save through; block the redundant second one
+  const persistence = new Persistence(fake.store, () => {});
+
+  // First session: the save completes, so the document is clean...
+  const firstSession = docWith('v1');
+  persistence.changed('doc', firstSession);
+  await persistence.save('doc', firstSession);
+  expect(persistence.isDirty('doc')).toBe(false);
+
+  // ...but a redundant checkpoint for the same edit is still writing.
+  const staleSave = persistence.save('doc', firstSession);
+  await fake.blockedWriteStarted;
+
+  // Hocuspocus unloads the document; it reopens and is edited again right away.
+  persistence.forget('doc');
+  const secondSession = docWith('v2');
+  persistence.changed('doc', secondSession);
+  const freshSave = persistence.save('doc', secondSession);
+
+  fake.releaseBlockedWrite();
+  await Promise.all([staleSave, freshSave]);
+
+  expect(fake.writes.at(-1)).toBe('v2'); // the stale snapshot did not land last
+  expect(fake.maxConcurrent).toBe(1); // one queue for the id, never two
+  await persistence.close();
 });
 
 test('a failed save rejects and leaves the document dirty', async () => {
@@ -151,7 +215,7 @@ test('close() rejects when the final write cannot be persisted', async () => {
 
   // The blocked write will fail; every retry during close also fails.
   fake.setFailing(true);
-  fake.releaseFirstWrite();
+  fake.releaseBlockedWrite();
 
   const error = await persistence.close().then(
     () => undefined,
