@@ -10,7 +10,7 @@
     "db:migrate": "bun run --bun drizzle-kit migrate"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "3.4.4",
+    "@hocuspocus/provider": "4.6.0",
     "@types/bun": "1.4.1",
     "@types/ws": "8.18.1",
     "drizzle-kit": "0.31.10",
@@ -18,12 +18,13 @@
   },
   "dependencies": {
     "@fastify/websocket": "11.3.0",
-    "@hocuspocus/server": "3.4.4",
+    "@hocuspocus/server": "4.6.0",
     "@md-docs/protocol": "workspace:*",
     "@t3-oss/env-core": "0.13.11",
     "drizzle-orm": "0.45.2",
     "fastify": "5.12.3",
     "postgres": "3.4.9",
+    "y-protocols": "1.0.7",
     "yjs": "13.6.32",
     "zod": "4.5.4"
   }

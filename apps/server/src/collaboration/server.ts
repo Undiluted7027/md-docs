@@ -108,7 +108,15 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
       },
     },
     (socket, request) => {
-      collaboration.handleConnection(socket, request.raw);
+      // Hocuspocus v4 takes a web Request and no longer attaches its own socket
+      // listeners, so the route forwards messages and the close event itself.
+      const connection = collaboration.handleConnection(socket, toWebRequest(request));
+      socket.on('message', (data) => {
+        if (Buffer.isBuffer(data)) connection.handleMessage(new Uint8Array(data));
+      });
+      socket.on('close', (code, reason) => {
+        connection.handleClose({ code, reason: reason.toString() });
+      });
     },
   );
   app.addHook('preClose', async () => {
@@ -120,4 +128,14 @@ export async function createServer(store: DocumentStore, options: CreateServerOp
     collaboration.documents.clear();
   });
   return { app, collaboration };
+}
+
+// Hocuspocus v4 hooks read the connection's web Request; build a minimal one
+// from the Fastify upgrade request.
+function toWebRequest(request: FastifyRequest): Request {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (typeof value === 'string') headers.set(name, value);
+  }
+  return new Request(`http://${request.headers.host ?? 'localhost'}${request.url}`, { headers });
 }
