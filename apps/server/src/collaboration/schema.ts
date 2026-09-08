@@ -1,5 +1,6 @@
 import { customType, pgSchema, text } from 'drizzle-orm/pg-core';
 
+// Postgres `bytea` column exposed to the app as a Uint8Array (a Yjs update blob).
 const binary = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',
   toDriver: (value) => Buffer.from(value),

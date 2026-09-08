@@ -3,7 +3,9 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    // "bun" covers the `bun:test` runtime used by co-located *.test.ts files;
+    // application code does not reference it.
+    "types": ["vite/client", "bun"]
   },
   "include": ["src"]
 }

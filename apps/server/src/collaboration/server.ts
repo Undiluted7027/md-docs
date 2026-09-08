@@ -3,27 +3,36 @@ import websocket from '@fastify/websocket';
 import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import type { DocumentStore } from './database.ts';
-import { createPersistence } from './persistence.ts';
+import { Persistence } from './persistence.ts';
+import { checkpointReply, parseCheckpointRequest } from './protocol.ts';
 
-export async function createServer(store: DocumentStore, documentName = 'poc-document') {
+export async function createServer(
+  store: DocumentStore,
+  documentName = 'poc-document',
+  allowedOrigin = 'http://localhost:5173',
+) {
   const app = Fastify({ logger: false });
-  const persistence = createPersistence(store, () => {
+  // The POC serves a single well-known document. Until an explicit create flow
+  // exists, ensure its row is present so the first client can load it.
+  await store.create(documentName);
+  const persistence = new Persistence(store, () => {
     console.error('Document persistence failed; retrying.');
   });
   const collaboration = new Hocuspocus({
     quiet: true,
+    // Hocuspocus requires every hook to return a promise. A rejected promise
+    // rejects the action (the connection, the unload); a resolved one allows it.
     onAuthenticate({ documentName: requested }) {
-      return requested !== documentName
-        ? Promise.reject(new Error('Document unavailable'))
-        : Promise.resolve();
+      if (requested !== documentName) {
+        return Promise.reject(new Error('Document unavailable'));
+      }
+      return Promise.resolve();
     },
     async onLoadDocument({ documentName: id, document }) {
-      try {
-        Y.applyUpdate(document, await store.load(id));
-        return document;
-      } catch {
-        throw new Error('Document unavailable');
-      }
+      const state = await store.load(id);
+      if (!state) throw new Error('Document unavailable');
+      Y.applyUpdate(document, state);
+      return document;
     },
     onChange({ documentName: id, document }) {
       persistence.changed(id, document);
@@ -31,32 +40,19 @@ export async function createServer(store: DocumentStore, documentName = 'poc-doc
     },
     beforeUnloadDocument() {
       // Retain unsaved state so a database failure cannot discard disconnected edits.
-      return persistence.dirty
-        ? Promise.reject(new Error('Document has unsaved changes'))
-        : Promise.resolve();
+      if (persistence.dirty) {
+        return Promise.reject(new Error('Document has unsaved changes'));
+      }
+      return Promise.resolve();
     },
     async onStateless({ payload, document, documentName: id, connection }) {
-      let message: unknown;
-      try {
-        message = JSON.parse(payload);
-      } catch {
-        return;
-      }
-      if (
-        typeof message !== 'object' ||
-        message === null ||
-        !('type' in message) ||
-        message.type !== 'checkpoint' ||
-        !('id' in message) ||
-        typeof message.id !== 'string' ||
-        message.id.length > 100
-      )
-        return;
+      const request = parseCheckpointRequest(payload);
+      if (!request) return;
       try {
         await persistence.save(id, document);
-        connection.sendStateless(JSON.stringify({ type: 'saved', id: message.id }));
+        connection.sendStateless(checkpointReply({ type: 'saved', id: request.id }));
       } catch {
-        connection.sendStateless(JSON.stringify({ type: 'save-failed', id: message.id }));
+        connection.sendStateless(checkpointReply({ type: 'save-failed', id: request.id }));
       }
     },
   });
@@ -74,7 +70,7 @@ export async function createServer(store: DocumentStore, documentName = 'poc-doc
     {
       websocket: true,
       preValidation(request, reply, done) {
-        if (request.headers.origin !== 'http://localhost:5173') {
+        if (request.headers.origin !== allowedOrigin) {
           void reply.code(403).send({ error: 'Origin not allowed' });
           return;
         }
@@ -92,7 +88,6 @@ export async function createServer(store: DocumentStore, documentName = 'poc-doc
   app.addHook('onClose', () => {
     for (const document of collaboration.documents.values()) document.destroy();
     collaboration.documents.clear();
-    return Promise.resolve();
   });
   return { app, collaboration };
 }

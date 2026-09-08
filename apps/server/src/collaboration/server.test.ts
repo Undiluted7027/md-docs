@@ -3,40 +3,55 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/pro
 import * as Y from 'yjs';
 import { createServer } from './server.ts';
 import { openDatabase, type DocumentStore } from './database.ts';
+import { checkpointRequest, parseCheckpointReply } from './protocol.ts';
 
+const TIMEOUT_MS = 5000;
+const POLL_MS = 10;
+
+// Cleanups run in reverse registration order after each test, so a helper can
+// register its own teardown right where it sets a resource up.
 const cleanups: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.reverse()) await cleanup();
   cleanups.length = 0;
 });
 
-async function until(condition: () => boolean, timeout = 5000) {
-  const deadline = Date.now() + timeout;
+async function until(condition: () => boolean) {
+  const deadline = Date.now() + TIMEOUT_MS;
   while (!condition()) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for collaboration');
-    await Bun.sleep(10);
+    await Bun.sleep(POLL_MS);
   }
 }
 
+// Reads the text content out of a stored Yjs document snapshot.
+function decode(state: Uint8Array): string {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, state);
+  const text = doc.getText('content').toJSON();
+  doc.destroy();
+  return text;
+}
+
+// Browsers send an Origin header; the server only accepts the dev web origin.
 class BrowserSocket extends WebSocket {
   constructor(url: string) {
     super(url, { headers: { origin: 'http://localhost:5173' } });
   }
 }
 
+// Starts a collaboration server on a random port and returns its WebSocket URL.
 async function start(store: DocumentStore, name = 'poc-document') {
   const server = await createServer(store, name);
-  const address = await server.app.listen({ port: 0, host: '127.0.0.1' });
+  const httpAddress = await server.app.listen({ port: 0, host: '127.0.0.1' });
   cleanups.push(() => server.app.close());
-  return { ...server, url: address.replace('http:', 'ws:') + '/collaboration' };
+  return { ...server, url: httpAddress.replace('http:', 'ws:') + '/collaboration' };
 }
 
+// Connects a client to the server, like a browser tab would.
 function client(url: string, name = 'poc-document') {
   const document = new Y.Doc();
-  const websocketProvider = new HocuspocusProviderWebsocket({
-    url,
-    WebSocketPolyfill: BrowserSocket,
-  });
+  const websocketProvider = new HocuspocusProviderWebsocket({ url, WebSocketPolyfill: BrowserSocket });
   const provider = new HocuspocusProvider({ websocketProvider, name, document, awareness: null });
   provider.attach();
   cleanups.push(() => {
@@ -47,41 +62,100 @@ function client(url: string, name = 'poc-document') {
   return { document, provider, websocketProvider, text: document.getText('content') };
 }
 
-async function checkpoint(provider: HocuspocusProvider) {
+// Asks the server to persist the document and resolves with its reply.
+async function checkpoint(provider: HocuspocusProvider): Promise<'saved' | 'save-failed'> {
   await until(() => provider.synced && !provider.hasUnsyncedChanges);
   const id = crypto.randomUUID();
-  return new Promise<string>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       provider.off('stateless', receive);
       reject(new Error('Checkpoint timeout'));
-    }, 5000);
+    }, TIMEOUT_MS);
     function receive({ payload }: { payload: string }) {
-      const message: unknown = JSON.parse(payload);
-      if (
-        typeof message !== 'object' ||
-        message === null ||
-        !('id' in message) ||
-        message.id !== id ||
-        !('type' in message) ||
-        typeof message.type !== 'string'
-      )
-        return;
+      const reply = parseCheckpointReply(payload);
+      if (!reply || reply.id !== id) return;
       clearTimeout(timeout);
       provider.off('stateless', receive);
-      resolve(message.type);
+      resolve(reply.type);
     }
     provider.on('stateless', receive);
-    provider.sendStateless(JSON.stringify({ type: 'checkpoint', id }));
+    provider.sendStateless(checkpointRequest(id));
   });
 }
 
+// An in-memory document store. `load` returns whatever the last successful
+// `save` wrote, so tests can read persisted state back through it.
 function memoryStore() {
   let state = new Uint8Array([0, 0]);
   return {
+    create: () => Promise.resolve(),
     load: () => Promise.resolve(state),
     save: (_id: string, next: Uint8Array) => {
       state = new Uint8Array(next);
       return Promise.resolve();
+    },
+  };
+}
+
+// Wraps a store so its saves fail while `failing` is true, and counts attempts
+// and successes.
+function faultyStore(inner: DocumentStore) {
+  let failing = false;
+  let attempts = 0;
+  let successes = 0;
+  return {
+    store: {
+      ...inner,
+      async save(id: string, state: Uint8Array) {
+        attempts += 1;
+        if (failing) throw new Error('Injected save failure');
+        await inner.save(id, state);
+        successes += 1;
+      },
+    },
+    setFailing: (value: boolean) => {
+      failing = value;
+    },
+    get attempts() {
+      return attempts;
+    },
+    get successes() {
+      return successes;
+    },
+  };
+}
+
+// Wraps a store so its first save blocks until `unblock()`, and records how many
+// saves run at once — the persistence layer must never run two concurrently.
+function blockingStore(inner: DocumentStore) {
+  const firstSaveStarted = Promise.withResolvers<undefined>();
+  const unblocked = Promise.withResolvers<undefined>();
+  let saves = 0;
+  let concurrent = 0;
+  let maxConcurrent = 0;
+  return {
+    store: {
+      ...inner,
+      async save(id: string, state: Uint8Array) {
+        concurrent += 1;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        if (saves++ === 0) {
+          firstSaveStarted.resolve(undefined);
+          await unblocked.promise;
+        }
+        await inner.save(id, state);
+        concurrent -= 1;
+      },
+    },
+    firstSaveStarted: firstSaveStarted.promise,
+    unblock: () => {
+      unblocked.resolve(undefined);
+    },
+    get saves() {
+      return saves;
+    },
+    get maxConcurrent() {
+      return maxConcurrent;
     },
   };
 }
@@ -91,19 +165,29 @@ test('concurrent edits and offline changes converge over real WebSockets', async
   const a = client(server.url);
   const b = client(server.url);
   await until(() => a.provider.synced && b.provider.synced);
+
+  // Simultaneous inserts at the same position converge on both clients.
   a.text.insert(0, 'alpha');
   b.text.insert(0, 'beta');
-  await until(() => a.text.toJSON() === b.text.toJSON() && a.text.length === 9);
+  await until(
+    () => a.text.toJSON() === b.text.toJSON() && a.text.length === 'alpha'.length + 'beta'.length,
+  );
+
+  // While a is offline, both clients keep editing.
   a.websocketProvider.disconnect();
   await until(() => !a.provider.synced);
   a.text.insert(2, '-offline-');
   b.text.insert(b.text.length, '-online-');
   a.text.delete(0, 1);
+
+  // On reconnect the edits merge both ways.
   await a.websocketProvider.connect();
   await until(() => a.provider.synced && a.text.toJSON() === b.text.toJSON());
   expect(a.text.toJSON()).toContain('-offline-');
   expect(a.text.toJSON()).toContain('-online-');
   expect(await checkpoint(a.provider)).toBe('saved');
+
+  // After every client leaves and one reconnects, the document is still there.
   a.provider.destroy();
   b.provider.destroy();
   await until(() => server.collaboration.getConnectionsCount() === 0);
@@ -112,60 +196,50 @@ test('concurrent edits and offline changes converge over real WebSockets', async
   expect(server.collaboration.getConnectionsCount()).toBe(1);
 });
 
-test('failed writes do not acknowledge success; retry includes deletion-only edits', async () => {
-  const store = memoryStore();
-  let fail = false;
-  let persisted = new Uint8Array([0, 0]);
-  const server = await start({
-    ...store,
-    async save(id, state) {
-      if (fail) throw new Error('Injected database failure');
-      await store.save(id, state);
-      persisted = new Uint8Array(state);
-    },
-  });
+test('a failed write is never acknowledged, and the retry includes deletion-only edits', async () => {
+  const base = memoryStore();
+  const faulty = faultyStore(base);
+  const server = await start(faulty.store);
   const a = client(server.url);
   await until(() => a.provider.synced);
+
   a.text.insert(0, 'keep delete');
   expect(await checkpoint(a.provider)).toBe('saved');
-  fail = true;
-  a.text.delete(4, 7);
+
+  faulty.setFailing(true);
+  a.text.delete(4, 7); // removes ' delete', leaving 'keep'
   expect(await checkpoint(a.provider)).toBe('save-failed');
-  const before = new Y.Doc();
-  Y.applyUpdate(before, persisted);
-  expect(before.getText('content').toJSON()).toBe('keep delete');
-  before.destroy();
-  fail = false;
+  expect(decode(await base.load())).toBe('keep delete'); // unchanged by the failed write
+
+  faulty.setFailing(false);
   expect(await checkpoint(a.provider)).toBe('saved');
-  const after = new Y.Doc();
-  Y.applyUpdate(after, persisted);
-  expect(after.getText('content').toJSON()).toBe('keep');
-  after.destroy();
+  expect(decode(await base.load())).toBe('keep'); // the deletion is persisted on retry
 });
 
 test('load failure never completes initial synchronization', async () => {
-  const store = memoryStore();
   const server = await start({
-    ...store,
+    ...memoryStore(),
     load: () => Promise.reject(new Error('Injected read failure')),
   });
   const a = client(server.url);
-  let closed = false;
+  let failed = false;
   a.provider.on('authenticationFailed', () => {
-    closed = true;
+    failed = true;
   });
-  await until(() => closed);
+  await until(() => failed);
   expect(a.provider.synced).toBe(false);
 });
 
 test('rejects wrong origins and unknown document names', async () => {
   const server = await start(memoryStore());
+
   const response = await server.app.inject({
     method: 'GET',
     url: '/collaboration',
     headers: { origin: 'https://example.com' },
   });
   expect(response.statusCode).toBe(403);
+
   const a = client(server.url, 'another-document');
   let rejected = false;
   a.provider.on('authenticationFailed', () => {
@@ -185,93 +259,74 @@ databaseTest('local Supabase restores acknowledged state after server replacemen
     await database.remove(name);
     await database.close();
   });
+
   const first = await start(database, name);
   const a = client(first.url, name);
   await until(() => a.provider.synced);
   a.text.insert(0, 'survives restart');
   expect(await checkpoint(a.provider)).toBe('saved');
+
   a.provider.destroy();
   await first.app.close();
+
   const second = await start(database, name);
   const b = client(second.url, name);
   await until(() => b.provider.synced);
   expect(b.text.toJSON()).toBe('survives restart');
 });
 
-test('checkpoint acknowledgement waits for commit and queued snapshots cannot overwrite newer edits', async () => {
-  const store = memoryStore();
-  const gate = Promise.withResolvers<undefined>();
-  let entered = false;
-  let writes = 0;
-  let active = 0;
-  let maxActive = 0;
-  const server = await start({
-    ...store,
-    async save(id, state) {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      if (writes++ === 0) {
-        entered = true;
-        await gate.promise;
-      }
-      await store.save(id, state);
-      active -= 1;
-    },
-  });
+test('a checkpoint is acknowledged only after commit, and a queued snapshot cannot overwrite newer edits', async () => {
+  const base = memoryStore();
+  const blocking = blockingStore(base);
+  const server = await start(blocking.store);
   const a = client(server.url);
   await until(() => a.provider.synced);
+
+  // First checkpoint: its write blocks inside the store, so it cannot ack yet.
   a.text.insert(0, 'older');
-  let acknowledged = false;
+  let firstAcknowledged = false;
   const first = checkpoint(a.provider).then((result) => {
-    acknowledged = true;
+    firstAcknowledged = true;
     return result;
   });
+
   try {
-    await until(() => entered);
-    expect(acknowledged).toBe(false);
+    await blocking.firstSaveStarted;
+    expect(firstAcknowledged).toBe(false);
+
+    // A second checkpoint with a newer edit arrives while the first write is stuck.
     a.text.insert(a.text.length, ' newer');
     const second = checkpoint(a.provider);
-    // Let the second request reach the server while the first write is blocked.
-    await Bun.sleep(30);
-    expect(writes).toBe(1);
-    gate.resolve(undefined);
+    await Bun.sleep(30); // give the second request time to reach the server
+    expect(blocking.saves).toBe(1); // still serialized behind the blocked write
+
+    blocking.unblock();
     expect(await first).toBe('saved');
     expect(await second).toBe('saved');
-    expect(maxActive).toBe(1);
-    const restored = new Y.Doc();
-    Y.applyUpdate(restored, await store.load());
-    expect(restored.getText('content').toJSON()).toBe('older newer');
-    restored.destroy();
   } finally {
-    gate.resolve(undefined);
+    blocking.unblock(); // never leave the store's write queue blocked
   }
+
+  expect(blocking.maxConcurrent).toBe(1);
+  expect(decode(await base.load())).toBe('older newer');
 });
 
-test('autosave retries without another edit and retains state after the last client leaves', async () => {
-  const store = memoryStore();
-  let fail = true;
-  let attempted = false;
-  let succeeded = false;
-  const server = await start({
-    ...store,
-    async save(id, state) {
-      attempted = true;
-      if (fail) throw new Error('Injected temporary outage');
-      await store.save(id, state);
-      succeeded = true;
-    },
-  });
+test('autosave retries on its own and keeps state after the last client leaves', async () => {
+  const base = memoryStore();
+  const faulty = faultyStore(base);
+  faulty.setFailing(true);
+  const server = await start(faulty.store);
   const a = client(server.url);
   await until(() => a.provider.synced);
+
   a.text.insert(0, 'pending after disconnect');
-  await until(() => attempted);
+  await until(() => faulty.attempts > 0); // the first autosave ran and failed
+
   a.provider.destroy();
   a.websocketProvider.destroy();
   await until(() => server.collaboration.getConnectionsCount() === 0);
-  fail = false;
-  await until(() => succeeded);
-  const restored = new Y.Doc();
-  Y.applyUpdate(restored, await store.load());
-  expect(restored.getText('content').toJSON()).toBe('pending after disconnect');
-  restored.destroy();
+
+  faulty.setFailing(false);
+  await until(() => faulty.successes > 0); // a retry succeeded with no client connected
+  expect(decode(await base.load())).toBe('pending after disconnect');
 });

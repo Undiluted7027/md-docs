@@ -9,7 +9,9 @@ coverage/
 .DS_Store
 
 AGENTS.md
+CLAUDE.md
 .agents/
+.claude/
 skills-lock.json
 
 *-verification.md
