@@ -1,9 +1,12 @@
+import { lazy, Suspense } from 'react';
 import { LandingPage } from './landing/LandingPage.tsx';
-import { DocumentPage, DocumentUnavailable } from './documents/DocumentPage.tsx';
+import { DocumentUnavailable } from './documents/DocumentUnavailable.tsx';
 import { DocumentBrandHeader } from './documents/DocumentChrome.tsx';
 import '@fontsource-variable/manrope';
 import './index.css';
 import './documents/documents.css';
+
+const DocumentPage = lazy(() => import('./documents/DocumentPage.tsx'));
 
 export default function App() {
   if (location.pathname === '/')
@@ -15,7 +18,9 @@ export default function App() {
   return (
     <main className="document-app">
       <DocumentBrandHeader />
-      {route()}
+      <Suspense fallback={<p className="document-route-loading">Opening document…</p>}>
+        {route()}
+      </Suspense>
     </main>
   );
 }

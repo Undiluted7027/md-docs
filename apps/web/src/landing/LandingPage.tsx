@@ -1,6 +1,6 @@
-import { motion, useReducedMotion } from 'motion/react';
+import { lazy, Suspense, useRef } from 'react';
+import { motion, useInView, useReducedMotion } from 'motion/react';
 import { CreateDocument } from './CreateDocument.tsx';
-import { EditorExample } from './EditorExample.tsx';
 import { HeroArtwork } from './HeroArtwork.tsx';
 import { LandingFooter } from './LandingFooter.tsx';
 import {
@@ -10,6 +10,8 @@ import {
   SaveSketch,
 } from './FeatureSketches.tsx';
 import './landing.css';
+
+const EditorExample = lazy(() => import('./EditorExample.tsx'));
 
 const reveal = {
   hidden: { opacity: 0, y: 24 },
@@ -22,6 +24,13 @@ const headlineReveal = {
 
 export function LandingPage() {
   const reducedMotion = useReducedMotion();
+
+  // The editor example pulls in CodeMirror and the Markdown renderer (~700 KB).
+  // Hold that import until the section is near the viewport so visitors who read
+  // only the hero never download it.
+  const exampleRef = useRef<HTMLElement>(null);
+  const exampleNear = useInView(exampleRef, { once: true, margin: '400px 0px' });
+
   return (
     <>
       <a className="landing-skip" href="#create-document">
@@ -76,14 +85,34 @@ export function LandingPage() {
         <HeroArtwork />
       </section>
 
-      <motion.div
+      <motion.section
+        ref={exampleRef}
+        id="try-editor"
+        className="landing-example"
+        aria-labelledby="try-editor-title"
         initial={reducedMotion ? false : { opacity: 0, y: 28 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.12 }}
         transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
       >
-        <EditorExample />
-      </motion.div>
+        <div className="landing-example-intro">
+          <h2 id="try-editor-title">From a thought to a shared page.</h2>
+          <p>Try it below. A little syntax goes a long way.</p>
+        </div>
+        {exampleNear ? (
+          <Suspense
+            fallback={
+              <div className="landing-example-frame landing-example-frame-idle">
+                Loading the editor example…
+              </div>
+            }
+          >
+            <EditorExample />
+          </Suspense>
+        ) : (
+          <div className="landing-example-frame landing-example-frame-idle" aria-hidden="true" />
+        )}
+      </motion.section>
 
       <section id="sharing" className="landing-sharing" aria-labelledby="sharing-title">
         <motion.div

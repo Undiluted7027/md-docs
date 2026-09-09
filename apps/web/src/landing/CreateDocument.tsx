@@ -1,7 +1,17 @@
 import { useRef, useState } from 'react';
 import { createDocument } from '../documents/api.ts';
 
-export function CreateDocument() {
+interface CreateDocumentProps {
+  createDocumentRequest?: typeof createDocument;
+  navigate?: (path: string) => void;
+}
+
+export function CreateDocument({
+  createDocumentRequest = createDocument,
+  navigate = (path) => {
+    location.assign(path);
+  },
+}: CreateDocumentProps = {}) {
   const pending = useRef(false);
   const [creating, setCreating] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -13,8 +23,8 @@ export function CreateDocument() {
     setCreating(true);
     setFailed(false);
     try {
-      const document = await createDocument();
-      location.assign(`/documents/${document.id}`);
+      const document = await createDocumentRequest();
+      navigate(`/documents/${document.id}`);
     } catch {
       pending.current = false;
       setCreating(false);

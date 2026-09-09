@@ -257,6 +257,15 @@ main.landing {
   border-radius: 7px;
   background: var(--landing-panel);
 }
+/* Reserve the example's height before it loads so the page does not jump. */
+.landing-example-frame-idle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  color: var(--landing-muted);
+  font-size: 14px;
+}
 .landing-example-header {
   display: flex;
   justify-content: space-between;

@@ -1,9 +1,10 @@
 # Landing page design
 
-The landing page uses graphite, citron, Manrope, and a folded-paper Markdown symbol.
+This slice added the landing page and brought the document screens onto the same
+visual language: graphite, citron, Manrope, and a folded-paper Markdown symbol.
 Obsidian's product-led hierarchy and StackEdit's concrete editor examples informed
-the layout. The sample uses CodeMirror and the same Markdown renderer as the
-collaborative workspace; it does not create or save a document.
+the layout. The landing sample uses CodeMirror and the same Markdown renderer as
+the collaborative workspace; it does not create or save a document.
 
 ## Implementation
 
@@ -12,15 +13,25 @@ and footer entrances. The artwork's pointer tilt uses motion values rather than
 React state. Reduced-motion preferences disable the entrances and tilt. CSS
 handles responsive layout, hover feedback, and system light/dark themes.
 
+The interactive editor example imports CodeMirror and the Markdown renderer
+(~700 KB), so it is not loaded until that section approaches the viewport. A
+visitor who reads only the hero never downloads it.
+
 The large footer wordmark scales to its container width. The sketches and favicon
-are small SVGs, with no external icon dependency. The document workspace keeps its
-existing appearance and behavior.
+are small SVGs, with no external icon dependency.
+
+The document workspace, join, and unavailable screens were restyled to share this
+palette, typography, and chrome (`apps/web/src/documents/DocumentChrome.tsx`,
+`documents.css`). Their collaboration, saving, export, and access behavior is
+unchanged; only the presentation moved.
 
 ## Artwork
 
-`apps/web/public/landing/markdown-sculpture.png` is the original generated asset.
-The page loads the approximately 64 KB WebP version beside it. The PNG is used for
-social metadata. Both originate from the built-in image-generation tool.
+The artwork came from the built-in image-generation tool. The page loads
+`markdown-sculpture.webp` (about 64 KB); social metadata points at
+`markdown-sculpture.jpg` (1200 px wide, about 180 KB) because most scrapers do
+not accept WebP. The lossless original is not kept in the repo; regenerate it
+from the prompt below if a larger source is needed.
 
 Generation prompt:
 

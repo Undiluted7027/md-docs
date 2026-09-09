@@ -3,13 +3,14 @@ import { JoinDocument } from '../collaboration/JoinDocument.tsx';
 import { documentExists } from './api.ts';
 import { DocumentEditor } from './DocumentEditor.tsx';
 import { DocumentIcon, DocumentWelcome } from './DocumentChrome.tsx';
+import { DocumentUnavailable } from './DocumentUnavailable.tsx';
 
 // 'unavailable' means the server answered and the document is not there;
 // 'error' means the check itself failed (offline, server down) and retrying may
 // still succeed.
 type AccessStatus = 'checking' | 'available' | 'unavailable' | 'error';
 
-export function DocumentPage({ documentId }: { documentId: string }) {
+export default function DocumentPage({ documentId }: { documentId: string }) {
   const [access, setAccess] = useState<AccessStatus>('checking');
   const [attempt, setAttempt] = useState(0);
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -66,25 +67,4 @@ export function DocumentPage({ documentId }: { documentId: string }) {
   }
   if (!displayName) return <JoinDocument onJoin={setDisplayName} />;
   return <DocumentEditor documentName={documentId} displayName={displayName} />;
-}
-
-export function DocumentUnavailable() {
-  return (
-    <DocumentWelcome>
-      <section className="document-gate">
-        <span className="document-gate-icon">
-          <DocumentIcon name="page" />
-        </span>
-        <p className="document-eyebrow">THIS PAGE IS OUT OF REACH</p>
-        <h1>Document unavailable</h1>
-        <p>
-          Check that you opened the complete edit link, or ask the person who shared it to send it
-          again.
-        </p>
-        <a className="document-primary-link" href="/">
-          Back to home <DocumentIcon name="arrow" />
-        </a>
-      </section>
-    </DocumentWelcome>
-  );
 }

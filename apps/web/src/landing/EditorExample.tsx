@@ -19,7 +19,7 @@ A short plan, made **together**.
 `;
 
 /** A local example using the product's editor and renderer, without a shared session. */
-export function EditorExample() {
+export default function EditorExample() {
   const container = useRef<HTMLDivElement>(null);
   const [source, setSource] = useState(exampleSource);
   const [mobileView, setMobileView] = useState<'source' | 'preview'>('source');
@@ -51,11 +51,7 @@ export function EditorExample() {
   }, []);
 
   return (
-    <section id="try-editor" className="landing-example" aria-labelledby="try-editor-title">
-      <div className="landing-example-intro">
-        <h2 id="try-editor-title">From a thought to a shared page.</h2>
-        <p>Try it below. A little syntax goes a long way.</p>
-      </div>
+    <>
       <div className="landing-example-frame">
         <header className="landing-example-header">
           <span className="landing-example-filename">weekend-plans.md</span>
@@ -97,6 +93,6 @@ export function EditorExample() {
       <p id="example-note">
         Try editing the source. This example stays in this tab and isn’t saved.
       </p>
-    </section>
+    </>
   );
 }

@@ -94,6 +94,11 @@ main.document-app {
   font-size: 12px;
 }
 
+.document-route-loading {
+  margin: 48px 0;
+  color: var(--doc-muted);
+}
+
 .document-eyebrow {
   display: block;
   margin: 0 0 14px;
