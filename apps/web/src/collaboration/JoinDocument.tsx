@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DISPLAY_NAME_MAX_LENGTH } from './presence.ts';
+import { DocumentIcon, DocumentWelcome } from '../documents/DocumentChrome.tsx';
 
 const DISPLAY_NAME_KEY = 'md-docs-display-name';
 
@@ -16,33 +17,49 @@ export function JoinDocument({ onJoin }: { onJoin: (displayName: string) => void
   }
 
   return (
-    <section className="join-document">
-      <h1>Join document</h1>
-      <p>Choose the name other participants will see while you are here.</p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        <label htmlFor="display-name">Display name</label>
-        <input
-          id="display-name"
-          autoComplete="name"
-          autoFocus
-          maxLength={DISPLAY_NAME_MAX_LENGTH}
-          required
-          value={displayName}
-          onChange={(event) => {
-            setDisplayName(event.target.value);
+    <DocumentWelcome>
+      <section className="join-document">
+        <span className="document-gate-icon">
+          <DocumentIcon name="page" />
+        </span>
+        <p className="document-eyebrow">YOUR PLACE ON THE PAGE</p>
+        <h1>Come on in.</h1>
+        <p>Choose the name other participants will see while you are here.</p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
           }}
-        />
-        <button type="submit" disabled={!displayName.trim()}>
-          Join document
-        </button>
-      </form>
-      <p className="note">Display names are labels, not verified identities.</p>
-    </section>
+        >
+          <label htmlFor="display-name">Display name</label>
+          <input
+            id="display-name"
+            autoComplete="name"
+            autoFocus
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            required
+            placeholder="e.g. Alex"
+            aria-describedby="display-name-note"
+            value={displayName}
+            onChange={(event) => {
+              setDisplayName(event.target.value);
+            }}
+          />
+          <button type="submit" disabled={!displayName.trim()}>
+            Join document <DocumentIcon name="arrow" />
+          </button>
+        </form>
+        <p className="note" id="display-name-note">
+          Display names are labels, not verified identities.
+        </p>
+        <div className="document-access-note">
+          <DocumentIcon name="link" />
+          <p>
+            Anyone with this link can read and edit. Use this space for non-sensitive documents.
+          </p>
+        </div>
+      </section>
+    </DocumentWelcome>
   );
 }
 
