@@ -1,112 +1,147 @@
 # Markdown Docs: proof-of-concept spec
 
-Status: draft
+Status: completed and deployed
+
+- Deployed application: [md-docs-bwd.pages.dev](https://md-docs-bwd.pages.dev)
+- Deployed API: [md-docs.onrender.com](https://md-docs.onrender.com)
 
 ## Purpose
 
-Build a shared Markdown document that two people can comfortably write together. Markdown is the source of truth; editing, previewing, sharing, and saving should feel straightforward.
+The proof of concept established that two people can comfortably write the same
+Markdown document, reconnect after a brief interruption, and return later without
+losing acknowledged work.
 
-The proof of concept succeeds when two people can write a real document together, reconnect after a brief interruption, and return later without losing acknowledged work.
+Markdown remains the source of truth. Preview, collaboration, persistence, and
+export all derive from the source without rewriting it.
 
-## Scope
+## Delivered workflow
 
-Ship one complete document workflow: create, edit, preview, share, collaborate, reopen, and export. No accounts are required for this prototype. Access is controlled by possession of a document's edit link.
+The POC supports one complete document workflow: create, edit, preview, share,
+collaborate, reopen, and export. It does not require an account. Possession of a
+document's unguessable edit link grants access.
 
 ### Create and reopen a document
 
-- The landing page offers a create-document action.
-- Creating a document produces a blank Markdown document, an editable title, and a unique edit URL.
-- The title defaults to “Untitled document.”
-- Opening that URL loads the saved title and content.
-- A missing or invalid document link shows a clear unavailable-document state without creating a replacement.
-- There is no document dashboard. People retain their links to revisit documents.
+- The root page creates a blank Markdown document with an editable title and a
+  unique edit URL.
+- New documents use “Untitled document” as their initial title.
+- Opening the edit URL restores the saved title and content.
+- Missing or invalid document links show an unavailable state and never create a
+  replacement document.
+- People retain their links to revisit documents; the POC has no document
+  dashboard.
 
 ### Edit and preview
 
-- Provide a Markdown source editor alongside a rendered preview on desktop.
-- On narrow screens, allow switching between source and preview.
-- Support headings, paragraphs, emphasis, links, ordered and unordered lists, blockquotes, fenced code blocks, and tables.
-- Preserve Markdown source as entered; rendering must not rewrite it.
-- Update the preview as content changes without moving the editor selection or stealing focus.
-- Render Markdown safely: do not execute embedded HTML or scripts, and reject unsafe link protocols.
-- Provide undo and redo for the current participant's edits without undoing another participant's work.
+- Desktop layouts show a Markdown source editor beside a rendered preview.
+- Narrow layouts provide a source and preview switch.
+- The preview supports headings, paragraphs, emphasis, links, lists,
+  blockquotes, fenced code blocks, tables, and the other syntax parsed by GFM.
+- Preview rendering preserves the source and does not move the editor selection
+  or steal focus.
+- Embedded HTML and scripts do not execute, and unsafe link protocols are
+  rejected.
+- Undo and redo apply to the current participant's edits without removing
+  another participant's independent work.
 
 ### Share and collaborate
 
-- A share action copies the current document's edit link and confirms that it was copied.
-- State clearly that anyone with this link can read and edit the document, including its title.
-- Participants choose a display name before entering the editor; names are labels, not verified identities.
-- Show connected participants and distinguish their cursors and selections with names and colors.
-- Propagate title and content edits without requiring refreshes.
-- Concurrent edits must converge to the same result on all connected clients. Do not use whole-document last-write-wins saves.
-- Presence is temporary and should disappear after a participant disconnects or times out.
+- A share action copies the edit link and confirms the result.
+- The interface explains that anyone with the link can read and edit the
+  document, including its title.
+- Participants choose an unverified display name before entering the editor.
+- Connected participants, remote cursors, and selections appear with names and
+  colors.
+- Title and content edits propagate without a refresh.
+- Concurrent edits converge through Yjs rather than whole-document
+  last-write-wins saves.
+- Presence is transient and disappears after a participant disconnects or times
+  out.
 
 ### Save and reconnect
 
-- Persist title and content automatically on the server so that closing all clients does not remove the document.
-- Show connection and persistence states: connecting, connected, reconnecting, unsaved changes, saved, and save failure as applicable.
-- “Saved” means the server has acknowledged durable persistence, not merely received an update over a socket.
-- Allow a loaded document to remain editable during a brief connection interruption while the page stays open.
-- Reconnect automatically and merge pending changes with changes made by other participants.
-- Never replace pending local changes with a stale server snapshot during reconnect.
-- Clearly indicate when edits remain unsaved. Surviving a tab close or reload while offline is outside this prototype's guarantee.
+- The server automatically persists collaborative document state in Postgres.
+- The interface distinguishes connecting, connected, reconnecting, unsaved,
+  saved, and save-failure states.
+- “Saved” means the server acknowledged a database checkpoint that covers the
+  client's current edit generation.
+- A loaded document remains editable during a temporary connection interruption
+  while its tab stays open.
+- Reconnection merges pending changes and does not replace them with a stale
+  server snapshot.
+- Failed saves remain visible and retry while connected.
+- Offline edits do not survive closing or reloading the tab.
 
 ### Export
 
-- Download the current editor content as a UTF-8 `.md` file.
-- Derive a safe filename from the title, with a fallback for an empty or unusable title.
-- Export includes local edits currently visible in the editor, even if persistence is pending.
-- The title is document metadata; do not silently insert it into the Markdown body.
+- Export downloads the current source as a UTF-8 `.md` file.
+- The filename is derived safely from the title and has a fallback.
+- Export includes local edits visible in the editor even when persistence is
+  pending.
+- The collaborative title remains metadata and is not inserted into the Markdown
+  body.
 
-## Access model and boundaries
+## Access model and limitations
 
-Use an unguessable edit token in the document URL. Require it for reading, editing, and joining the collaboration session. Documents must not be publicly enumerable.
+Document IDs are random UUIDs that also act as bearer edit tokens. The server
+requires an existing token when opening or editing a document and when joining a
+collaboration connection. Anyone who can open the document can export its current
+source in the browser. Documents are not publicly enumerable.
 
-This is a controlled prototype for non-sensitive documents. There is no owner identity, view-only access, link revocation, or recovery for a lost link. Those require a subsequent access-control feature rather than an implied promise in the UI.
+This model is suitable only for non-sensitive trial documents. There is no owner,
+view-only access, revocation, or recovery for a lost link. Signing in, once
+implemented, will establish identity but will not change these access guarantees
+until the server also implements ownership and authorization.
 
-## Implementation constraints
+## Implemented architecture
 
-- Use an established collaborative editing engine with a Markdown-capable source editor. Do not implement conflict resolution from scratch.
-- Keep collaborative document state authoritative. Preview and export derive from that state; persistence must preserve enough information to merge reconnecting clients correctly.
-- Synchronize the title through the same collaboration model or an equally explicit conflict policy.
-- Keep presence separate from durable document content.
-- Keep the deployment simple: one application, a collaboration service that may share its runtime, and durable storage. No microservice split is required.
-- Use TypeScript with inferred types where practical. Avoid `any` and unnecessary abstractions.
-- Select the concrete editor, collaboration library, persistence layer, and hosting approach during implementation. This draft does not commit to a stack.
-- Follow [AGENTS.md](../AGENTS.md), including obtaining explicit permission before editing configuration files.
+- React and Vite provide the browser application.
+- CodeMirror 6 provides the Markdown source editor.
+- Yjs, `y-codemirror.next`, and Hocuspocus provide shared text, presence,
+  participant-local undo, and automatic reconnection.
+- Bun runs the workspace tooling and the Fastify/Hocuspocus server.
+- Drizzle and Postgres persist Yjs binary state in the application-owned
+  `md_docs` schema.
+- A checkpoint request and reply distinguishes synchronization from durable
+  persistence.
+- Cloudflare Pages hosts the frontend, Render hosts the server, and Supabase
+  hosts Postgres.
 
-## Delivery slices
+The implementation keeps one frontend, one server process, and one database.
+Collaborative state remains authoritative, presence remains transient, and the
+system does not implement its own conflict-resolution algorithm.
 
-Each slice should work end to end and remain usable as the next slice is added.
+## Delivery record
 
-1. **Single-user document:** create a document, edit title and Markdown, preview, persist, reopen, and export. Establish the collaboration-compatible state model here to avoid replacing the save model later.
-2. **Shared editing:** join through an edit link, choose a name, see participants and cursors, and merge simultaneous edits.
-3. **Persistence and reconnect:** make acknowledgement states accurate, handle temporary disconnects and save failures, and verify recovery across a server restart.
+The POC was delivered and reviewed as five end-to-end slices:
 
-Sharing permissions beyond the edit link belong in [later work](./later-work.md).
+1. [POC 1: collaborative editing and durable persistence](https://github.com/Undiluted7027/md-docs/issues/1)
+2. [POC 2: document creation, editing, preview, and reopening](https://github.com/Undiluted7027/md-docs/issues/2)
+3. [POC 3: sharing, presence, remote cursors, and participant-local undo](https://github.com/Undiluted7027/md-docs/issues/3)
+4. [POC 4: saving, recovery, export, and narrow-screen usability](https://github.com/Undiluted7027/md-docs/issues/4)
+5. [POC 5: deployment and validation of the complete workflow](https://github.com/Undiluted7027/md-docs/issues/5)
 
-## Acceptance criteria
+The closed issues and their completion comments are the verification record for
+the automated checks and manual browser walkthroughs.
 
-The prototype is complete when these scenarios pass:
+## Acceptance record
 
-| Scenario                  | Required outcome                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Create and reopen         | A new document has a unique URL; reopening it restores the saved title and exact Markdown source.                     |
-| Render and export         | Supported Markdown renders correctly, unsafe content cannot execute, and export matches the current source.           |
-| Join from another browser | A second participant opens the link, chooses a name, and sees the same document and active participants.              |
-| Simultaneous edits        | Edits at overlapping and separate positions converge to identical content on both clients.                            |
-| Participant undo          | Undoing a local edit does not remove the other participant's independent edits.                                       |
-| Temporary disconnect      | With one page disconnected, both participants edit; reconnection merges the changes and both clients converge.        |
-| Durable save              | After “Saved,” closing all clients and restarting the server preserves the document.                                  |
-| Save failure              | A failed persistence operation never shows “Saved”; the user sees pending or failed status and can export their work. |
-| Invalid access            | Missing or invalid edit tokens cannot read, mutate, or subscribe to document state.                                   |
+| Scenario | Delivered outcome |
+| --- | --- |
+| Create and reopen | A new document receives a unique URL; reopening restores its saved title and exact source. |
+| Render and export | Supported Markdown renders safely, and export matches the current source. |
+| Join from another browser | A second participant joins through the link and sees the same document and presence. |
+| Simultaneous edits | Overlapping and separate edits converge on both clients. |
+| Participant undo | Undo removes the participant's own edit without removing another participant's work. |
+| Temporary disconnect | Both participants can edit during an interruption and converge after reconnection. |
+| Durable save | An acknowledged checkpoint survives closing clients and restarting the server. |
+| Save failure | A failed write never reports “Saved”; current work remains exportable and retries later. |
+| Invalid access | Missing and invalid document tokens cannot read, mutate, or subscribe to document state. |
 
-Use focused automated tests for convergence, persistence acknowledgement, and access checks where practical. Manually verify the two-browser flow, cursor behavior, preview layout, and narrow-screen switching. Avoid tests that simply mirror implementation details.
+## Work after the POC
 
-## Demo
-
-Create a document in one browser and share it with a second browser. Write and edit concurrently, show participant cursors, briefly disconnect one page, make changes in both, and reconnect. Confirm matching content, wait for “Saved,” close both pages, restart the server, and reopen the link. Finish by downloading the Markdown file.
-
-## Explicit exclusions
-
-Accounts, ownership, granular permissions, document lists, folders, comments, version-history UI, rich-text editing, attachments, full offline support, imports, integrations, and public publishing are outside this scope. See [later work](./later-work.md) for the reasons to revisit them.
+Accounts, ownership, granular permissions, document lists, folders, comments,
+version history, rich-text editing, attachments, durable offline access, imports,
+integrations, and public publishing were intentionally excluded. The current
+sequence and conditions for revisiting them are recorded in
+[later-work.md](./later-work.md).
