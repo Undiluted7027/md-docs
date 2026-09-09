@@ -6,6 +6,7 @@ import type { Participant } from '../collaboration/presence.ts';
 import { createEditorSession, type ConnectionStatus } from '../collaboration/session.ts';
 import { MarkdownPreview } from './MarkdownPreview.tsx';
 import { downloadMarkdown } from './exportMarkdown.ts';
+import { DocumentIcon } from './DocumentChrome.tsx';
 
 type DocumentView = 'source' | 'preview';
 
@@ -65,14 +66,21 @@ export function DocumentEditor({ documentName, displayName }: DocumentEditorProp
   return (
     <>
       <header className="document-header">
-        <input
-          aria-label="Document title"
-          className="document-title"
-          disabled={!loaded}
-          value={title}
-          onChange={(event) => session.current?.setTitle(event.target.value)}
-          onKeyDown={handleTitleUndo}
-        />
+        <div className="document-title-group">
+          <label className="document-eyebrow" htmlFor="document-title">
+            SHARED DOCUMENT
+          </label>
+          <input
+            id="document-title"
+            aria-label="Document title"
+            className="document-title"
+            disabled={!loaded}
+            value={title}
+            placeholder={loaded ? 'Untitled document' : 'Opening document…'}
+            onChange={(event) => session.current?.setTitle(event.target.value)}
+            onKeyDown={handleTitleUndo}
+          />
+        </div>
         <DocumentStatus connection={connection} save={save} loaded={loaded} />
       </header>
       <CollaborationControls
@@ -96,7 +104,7 @@ export function DocumentEditor({ documentName, displayName }: DocumentEditorProp
             setDocumentView('source');
           }}
         >
-          Source
+          <DocumentIcon name="source" /> Source
         </button>
         <button
           type="button"
@@ -107,21 +115,46 @@ export function DocumentEditor({ documentName, displayName }: DocumentEditorProp
             setDocumentView('preview');
           }}
         >
-          Preview
+          <DocumentIcon name="preview" /> Preview
         </button>
       </div>
       {/* data-mobile-view is read only by the narrow-screen CSS, which hides the
           pane that is not selected. On wide screens both panes always show. */}
       <div className="document-workspace" data-mobile-view={documentView}>
         <section id="markdown-source" className="source-pane" aria-label="Markdown source">
-          <h2>Markdown</h2>
+          <div className="document-pane-heading">
+            <h2>
+              <DocumentIcon name="source" /> Markdown
+            </h2>
+            <span>The way you write</span>
+          </div>
           <div className="editor" ref={container} />
         </section>
         <section id="markdown-preview" className="preview-pane">
-          <h2>Preview</h2>
+          <div className="document-pane-heading">
+            <h2>
+              <DocumentIcon name="preview" /> Live preview
+            </h2>
+            <span>The way it reads</span>
+          </div>
+          {loaded && !content && (
+            <div className="document-preview-empty">
+              <DocumentIcon name="page" />
+              <p>Your ideas, taking shape.</p>
+              <span>
+                Start writing in Markdown.
+                <br />
+                Your preview appears here as you type.
+              </span>
+            </div>
+          )}
           <MarkdownPreview source={content} />
         </section>
       </div>
+      <footer className="document-editor-footer">
+        <span>Plain text. Shared space.</span>
+        <span>Keep this link to return. Wait for “Saved” before closing.</span>
+      </footer>
     </>
   );
 }

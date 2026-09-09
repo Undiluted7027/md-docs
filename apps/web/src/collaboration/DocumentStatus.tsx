@@ -11,8 +11,12 @@ export function DocumentStatus({ connection, save, loaded }: DocumentStatusProps
   return (
     <div className="document-status">
       <p role="status" aria-live="polite">
-        <span>Connection: {connection}</span>
-        <span>Save: {save}</span>
+        <span className="document-connection" data-connected={connection === 'Connected'}>
+          Connection: {connection}
+        </span>
+        <span className="document-save" data-saved={save === 'Saved'}>
+          Save: {save}
+        </span>
       </p>
       <RecoveryNotice connection={connection} save={save} loaded={loaded} />
     </div>

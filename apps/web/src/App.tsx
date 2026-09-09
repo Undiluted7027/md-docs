@@ -1,14 +1,26 @@
 import { LandingPage } from './landing/LandingPage.tsx';
 import { DocumentPage, DocumentUnavailable } from './documents/DocumentPage.tsx';
+import { DocumentBrandHeader } from './documents/DocumentChrome.tsx';
+import '@fontsource-variable/manrope';
 import './index.css';
+import './documents/documents.css';
 
 export default function App() {
-  return <main className={location.pathname === '/' ? 'landing' : undefined}>{route()}</main>;
+  if (location.pathname === '/')
+    return (
+      <main className="landing">
+        <LandingPage />
+      </main>
+    );
+  return (
+    <main className="document-app">
+      <DocumentBrandHeader />
+      {route()}
+    </main>
+  );
 }
 
 function route() {
-  if (location.pathname === '/') return <LandingPage />;
-
   const documentId = documentIdFromPath(location.pathname);
   if (documentId) return <DocumentPage documentId={documentId} />;
 

@@ -1,5 +1,4 @@
 import { motion, useReducedMotion } from 'motion/react';
-import '@fontsource-variable/manrope';
 import { CreateDocument } from './CreateDocument.tsx';
 import { EditorExample } from './EditorExample.tsx';
 import { HeroArtwork } from './HeroArtwork.tsx';

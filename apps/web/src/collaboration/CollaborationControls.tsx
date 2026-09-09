@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Participant } from './presence.ts';
+import { DocumentIcon } from '../documents/DocumentChrome.tsx';
 
 interface CollaborationControlsProps {
   participants: Participant[];
@@ -47,35 +48,25 @@ export function CollaborationControls({
   return (
     <aside className="collaboration-controls" aria-label="Collaboration controls">
       <div className="document-actions">
-        <button type="button" className="secondary-button" disabled={!canUndo} onClick={onUndo}>
-          Undo
-        </button>
-        <button type="button" className="secondary-button" disabled={!canRedo} onClick={onRedo}>
-          Redo
-        </button>
+        <div className="document-history-actions" role="group" aria-label="Edit history">
+          <button type="button" className="secondary-button" disabled={!canUndo} onClick={onUndo}>
+            <DocumentIcon name="undo" /> Undo
+          </button>
+          <button type="button" className="secondary-button" disabled={!canRedo} onClick={onRedo}>
+            <DocumentIcon name="redo" /> Redo
+          </button>
+        </div>
         <button
           type="button"
-          onClick={() => {
-            void copyEditLink();
-          }}
-        >
-          Copy edit link
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
+          className="secondary-button document-export"
           disabled={!canExport}
           onClick={onExport}
         >
-          Export Markdown
+          <DocumentIcon name="export" /> Export Markdown
         </button>
-        <span className="copy-status" role="status">
-          {copyStatus === 'copied' && 'Link copied'}
-          {copyStatus === 'failed' && 'Could not copy link'}
-        </span>
       </div>
 
-      <div>
+      <div className="document-participants">
         <h2>Participants ({participants.length})</h2>
         <ul className="participant-list">
           {participants.map((participant) => (
@@ -85,14 +76,34 @@ export function CollaborationControls({
                 style={{ backgroundColor: participant.color }}
                 aria-hidden="true"
               />
-              {participant.name}
-              {participant.isLocal && ' (you)'}
+              <span className="participant-name">
+                {participant.name}
+                {participant.isLocal && ' (you)'}
+              </span>
             </li>
           ))}
         </ul>
       </div>
 
-      <p className="note">Anyone with this link can read and edit the document and its title.</p>
+      <div className="document-share">
+        <button
+          type="button"
+          aria-describedby="document-link-access"
+          onClick={() => {
+            void copyEditLink();
+          }}
+        >
+          <DocumentIcon name="link" /> Copy edit link
+        </button>
+        <span className="copy-status" role="status">
+          {copyStatus === 'copied' && 'Link copied'}
+          {copyStatus === 'failed' && 'Could not copy link'}
+        </span>
+      </div>
+
+      <p className="note document-link-access" id="document-link-access">
+        Anyone with this link can read and edit the document and its title.
+      </p>
     </aside>
   );
 }
