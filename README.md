@@ -103,5 +103,7 @@ must show “Document unavailable.” Never stop or reset the database for this 
 - [Proof-of-concept spec](docs/poc-spec.md)
 - [Later work](docs/later-work.md)
 - [Deployment](docs/deployment.md)
+- [Markdown math](docs/markdown-math.md)
+- [Code blocks and Mermaid diagrams](docs/markdown-code-and-diagrams.md)
 - [POC 1 verification](docs/poc-1-verification.md)
 - [POC 2 verification](docs/poc-2-verification.md)

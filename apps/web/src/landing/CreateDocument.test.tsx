@@ -1,10 +1,11 @@
 // Must stay first: importing this registers a DOM, which @testing-library/react
 // needs at its own import time. Do not let an import sorter move it down.
-import { unregisterTestDom } from './testDom.ts';
-import { afterAll, afterEach, expect, mock, test } from 'bun:test';
+import { registerTestDom, unregisterTestDom } from '../testDom.ts';
+import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { CreateDocument } from './CreateDocument.tsx';
 
+beforeEach(registerTestDom);
 afterEach(cleanup);
 afterAll(unregisterTestDom);
 

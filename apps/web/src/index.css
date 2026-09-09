@@ -65,6 +65,66 @@ button:disabled {
   background: #f2f2f2;
 }
 
+.preview .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.preview .katex-error {
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #9b2c2c14;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.preview .highlighted-code,
+.preview .mermaid-diagram {
+  max-width: 100%;
+  margin: 1em 0;
+}
+
+.preview .highlighted-code .shiki {
+  margin: 0;
+}
+
+.preview .mermaid-diagram {
+  overflow-x: auto;
+  text-align: center;
+}
+
+.preview .mermaid-diagram-rendered {
+  padding: 20px;
+  border: 1px solid #3b4235;
+  border-radius: 4px;
+  background: #1b1e1a;
+}
+
+.preview .mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.preview .mermaid-diagram-source {
+  text-align: left;
+}
+
+.preview .mermaid-diagram-source pre {
+  margin-bottom: 8px;
+}
+
+.preview .mermaid-diagram-source figcaption {
+  color: #687557;
+  font-size: 12px;
+}
+
+.preview .mermaid-diagram-source figcaption[role="alert"] {
+  color: #9b2c2c;
+}
+
 .preview table {
   border-collapse: collapse;
 }

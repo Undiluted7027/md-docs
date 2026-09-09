@@ -704,20 +704,6 @@ main.document-app {
   accent-color: #647e3d;
 }
 
-.preview .katex-display {
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 4px 0;
-}
-
-.preview .katex-error {
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: #9b2c2c14;
-  overflow-wrap: anywhere;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
 .document-app .preview .contains-task-list {
   padding-left: 0;
 }
