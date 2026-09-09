@@ -1,6 +1,4 @@
-// Must stay first: Testing Library reads `document` when its module loads.
-import { registerTestDom, unregisterTestDom } from '../testDom.ts';
-import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MarkdownPreview } from './MarkdownPreview.tsx';
@@ -8,11 +6,9 @@ import { parseProperties } from './properties.ts';
 import { sectionUrl } from './sectionLinks.ts';
 
 beforeEach(() => {
-  registerTestDom();
   window.location.hash = '';
 });
 afterEach(cleanup);
-afterAll(unregisterTestDom);
 
 test('reads scalar and flat-list properties only from opening frontmatter', () => {
   const source = [

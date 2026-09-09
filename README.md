@@ -62,7 +62,9 @@ Useful root commands:
 - `bun run dev`: run both applications.
 - `bun run lint` / `bun run lint:fix`: inspect / fix lint findings.
 - `bun run typecheck`: check both applications without emitting JavaScript.
-- `bun test`: run the Bun tests, including the database check when `DATABASE_URL` is set in the environment.
+- `bun run test`: run the server tests, then the web tests. The web tests run in
+  their own process with a preloaded DOM. The database check runs only when
+  `DATABASE_URL` is set. `bun run test:server` / `bun run test:web` run one half.
 - `bun run -F '@md-docs/web' build`: typecheck and build the frontend.
 - `bun run -F '@md-docs/server' start`: run the server without watching files.
 - `bun run db:generate`: generate a migration after an approved schema change.
@@ -74,9 +76,9 @@ values before the server opens a database connection. Vite separately validates
 its private local proxy port from `apps/web/.env`. Browser code has a distinct
 public environment contract for `VITE_SERVER_ORIGIN`; it is unset locally so Vite
 proxies `/api` and `/collaboration` to the same Fastify server.
-`bun test` does not load the server environment file, so the database-backed test
+The tests do not load the server environment file, so the database-backed test
 runs only when `DATABASE_URL` is already in the environment (`DATABASE_URL=… bun
-test`, or export it first). That test creates a unique document and removes only
+run test`, or export it first). That test creates a unique document and removes only
 that row; it never resets Supabase or deletes unrelated data. Expected
 injected-failure messages appear in the test output.
 

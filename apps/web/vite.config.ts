@@ -12,10 +12,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     build: {
-      // The editor stack (react-markdown, remark/rehype, KaTeX) is one ~950 KB
-      // chunk. It is dynamically imported and never loads on the landing hero or
-      // first paint, so the default 500 KB warning is noise here. Splitting math
-      // out per document is tracked separately.
+      // The editor stack (react-markdown, remark/rehype) is one ~800 KB chunk.
+      // It is dynamically imported and never loads on the landing hero or first
+      // paint, so the default 500 KB warning is noise here. KaTeX, Mermaid, and
+      // Shiki load separately, on demand.
       chunkSizeWarningLimit: 1000,
     },
     server: {

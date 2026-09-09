@@ -1,13 +1,8 @@
-// Must stay first: importing this registers a DOM, which @testing-library/react
-// needs at its own import time. Do not let an import sorter move it down.
-import { registerTestDom, unregisterTestDom } from '../testDom.ts';
-import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, expect, mock, test } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
 import { MermaidDiagramView, type DiagramRenderer } from './MermaidDiagram.tsx';
 
-beforeEach(registerTestDom);
 afterEach(cleanup);
-afterAll(unregisterTestDom);
 
 function deferredMarkup() {
   let resolve: (html: string) => void = () => undefined;

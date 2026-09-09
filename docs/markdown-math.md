@@ -3,6 +3,10 @@
 The preview renders LaTeX-style math with KaTeX. The Markdown source remains
 unchanged when it is synchronized, saved, or exported.
 
+KaTeX loads the first time a document contains a `$`. A document with no math
+never downloads it, and a math document shows the literal source for a moment
+before the rendered result appears.
+
 Use one dollar sign on each side for inline math:
 
 ```markdown
