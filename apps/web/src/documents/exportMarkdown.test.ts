@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { createMarkdownExport, markdownFilename } from './exportMarkdown.ts';
 
 test('exports the current Markdown exactly without adding the document title', async () => {
-  const source = '# Existing heading\n\nCafé ☕\n';
+  const source = '# Existing heading\n\nCafé ☕ — Euler: $e^{i\\pi} + 1 = 0$\n\nPrice: \\$12\n';
   const exported = createMarkdownExport('Planning notes', source);
 
   expect(exported.filename).toBe('Planning-notes.md');
