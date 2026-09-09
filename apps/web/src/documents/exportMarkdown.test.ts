@@ -3,6 +3,11 @@ import { createMarkdownExport, markdownFilename } from './exportMarkdown.ts';
 
 test('exports the current Markdown exactly without adding the document title', async () => {
   const source = [
+    '---',
+    'status: Draft',
+    'reviewers: [Alex, Sam]',
+    '---',
+    '',
     '# Existing heading',
     '',
     'Café ☕ — Euler: $e^{i\\pi} + 1 = 0$',

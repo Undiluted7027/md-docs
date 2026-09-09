@@ -86,7 +86,7 @@ export default function EditorExample() {
           </div>
           <div id="example-preview" className="landing-example-preview">
             <h3>Live preview</h3>
-            <MarkdownPreview source={source} />
+            <MarkdownPreview source={source} sectionLinks={false} />
           </div>
         </div>
       </div>

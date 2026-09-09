@@ -105,5 +105,6 @@ must show “Document unavailable.” Never stop or reset the database for this 
 - [Deployment](docs/deployment.md)
 - [Markdown math](docs/markdown-math.md)
 - [Code blocks and Mermaid diagrams](docs/markdown-code-and-diagrams.md)
+- [Properties, section links, footnotes, and callouts](docs/advanced-markdown.md)
 - [POC 1 verification](docs/poc-1-verification.md)
 - [POC 2 verification](docs/poc-2-verification.md)
